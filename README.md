@@ -24,49 +24,6 @@
 
 ---
 
-## The problem
-
-<img src="docs/Scene1.png" alt="A developer happily drops a glowing API key into a treasure chest while fireworks play on the screen behind him">
-
-**Month one.** Somebody drops an API key into a config file, ships a feature, and it works. Everyone is delighted.
-
-<img src="docs/Scene2.png" alt="The same API key has spread to a nightly robot, a salesperson and another developer, while a monster in the corner eats a pile of cash">
-
-**Month two.** That key is now in three more services, a nightly job and a client demo. Someone swaps in the bigger model because the small one felt dull. It costs fifteen times more. Nothing on the screen changes, so nobody notices.
-
-<img src="docs/Scene3.png" alt="A meeting room with an enormous invoice unrolling across the table while everyone points at each other">
-
-**Month three.** The invoice arrives, and nobody in the room can say which team spent it, or on what. One key, one number, everybody's fingerprints.
-
-<img src="docs/Scene4.png" alt="A driver watching a spiking cost chart in the rear view mirror while the road ahead ends at a cliff">
-
-Every tool we reached for was a dashboard. A dashboard is a rear view mirror. By the time a chart turns red, the money is already behind you.
-
-> **No chart has ever refunded a dollar.**
-> Seeing the spending was never the problem. Seeing was all we could do.
-
-## The approach
-
-Move the decision to where it matters: before the request leaves.
-
-<img src="docs/Scene5.png" alt="The CostPilot mascot flying between a Your App cloud and a Model Provider cloud, holding the connection, next to an editor showing a changed base_url">
-
-**One line on your side.** CostPilot sits between your app and the providers and speaks the OpenAI API, so all you change is `base_url`.
-
-<img src="docs/Scene6.png" alt="The mascot at a checkpoint desk questioning each request, then holding a stop sign that reads HTTP 402 budget exceeded">
-
-**Every request gets questioned first.** Who are you. May you use this model. Can a cache answer this instead. Is there budget left. If the answer is no, the request never leaves, and you get a `402` with a reason your code can read.
-
-<img src="docs/Scene7.png" alt="A stream of tokens flowing until a limit gauge redlines, then the mascot snips the stream cleanly and the rest of the budget stays unspent">
-
-**The meter keeps running while it streams.** An answer can run far longer than anyone estimated, so when the spend crosses the line the stream is cut clean, with a real `finish_reason` and a `[DONE]`. You pay for what arrived. The overshoot is one chunk.
-
-Estimates only ever place a temporary hold — a deliberate over-guess to reserve budget before the request leaves. Every dollar on the ledger is the exact provider-reported token count times the published price; the moment the provider's real number arrives, it replaces the guess.
-
-<img src="docs/Scene8.png" alt="A calm office, feet on the desk, a screen reading budget status safe, and the mascot giving a thumbs up">
-
-And it has to be invisible, or engineers will route around it. The whole check lands at 2.7 ms median under 100 requests per second.
-
 ## Architecture
 
 Ten steps. Everything the request touches lights up as it goes.
