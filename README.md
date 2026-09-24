@@ -18,7 +18,7 @@
 <img height="56" alt="ClickHouse" src="https://cdn.simpleicons.org/clickhouse/EFB100">
 </p>
 
-<a href="docs/README.md"><b>Setup and usage docs</b></a> · <a href="docs/BENCHMARK.md"><b>Benchmarks</b></a>
+<a href="docs/README.md"><b>Setup and usage docs</b></a> · <a href="docs/README.md#2-the-console"><b>Console</b></a> · <a href="sdk/typescript/"><b>TypeScript SDK</b></a> · <a href="docs/BENCHMARK.md"><b>Benchmarks</b></a>
 
 </div>
 
@@ -45,17 +45,39 @@ Ten steps. Everything the request touches lights up as it goes.
 | 9 | **Ledger** | write the real charge, once, even if you hang up |
 | 10 | **Settle** | release, publish, and leave an audit row explaining the verdict |
 
+## The console
+
+Budgets and policies are only useful if the people paying the bill can see and change them. The console is a multi-user web app on top of the gateway: sign in with GitHub or Google, get a workspace, invite your team, mint keys, set caps, approve held requests, and watch spend per team and model.
+
+<p align="center">
+  <img src="docs/console-overview.png" alt="CostPilot console overview: spend KPIs, daily spend chart, spend by team and model, governance decisions and team budget utilization" width="100%">
+</p>
+
+Each workspace is a hard tenant boundary. Two workspaces can both have a team called `platform` and never share a budget counter, a policy, an approval or an analytics row, and that is covered by an integration test rather than a promise. API keys keep working exactly as before; the dashboard uses a separate session chain with CSRF protection.
+
 ## Quickstart
 
 Docker is the only thing you need, and the demo costs nothing because the default upstream is a mock provider that lives inside the app.
 
 ```bash
-git clone https://github.com/tanhoangkhoanguyen/CostPilot.git
+git clone https://github.com/khangpt2k6/CostPilot.git
 cd CostPilot
 docker compose up --build -d
 ```
 
-Then walk through the ten minute demo, the CLI, the Python SDK, and going live with real providers here:
+Open <http://localhost:3000> and sign in with any email (local dev login, no password). You land in your own workspace and are also an admin of the seeded `acme` demo workspace, which already has keys and traffic.
+
+Then send a governed request from code:
+
+```ts
+import { CostPilot, BudgetExceededError } from "@costpilot/sdk";
+
+const cp = new CostPilot({ apiKey: "cp_demo_team_platform", baseURL: "http://localhost:8080" });
+const res = await cp.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "hi" }] });
+res.governance; // { modelDowngraded, modelRouted, budgetWarning, cacheHit }
+```
+
+The ten minute demo, the console, the CLI, both SDKs, and going live with real providers:
 
 ### → [Setup and usage docs](docs/README.md)
 
@@ -66,8 +88,9 @@ build.gradle  settings.gradle  gradlew  gradle/   build entry point (must be roo
 docker-compose.yml  docker-compose.real.yml       demo stack (must be root)
 docker/                                           Dockerfile + service configs
 src/                                              gateway source (Java only)
+web/                                              console (Next.js), its own Docker image
 cli/                                              admin CLI, its own Gradle subproject
-sdk/python/                                       Python client, not a Gradle module
+sdk/typescript/  sdk/python/                      clients, not Gradle modules
 docs/  loadtest/                                  documentation and benchmarks
 ```
 
