@@ -108,7 +108,7 @@ curl -si http://localhost:8080/v1/chat/completions \
 
 ### Watch it happen
 
-Open Grafana at <http://localhost:3000>. Anonymous viewing is on, use `admin` / `admin` if you want to edit. The governance dashboard shows requests, spend, and the budget rejections you just caused.
+Open Grafana at <http://localhost:3300>. Anonymous viewing is on, use `admin` / `admin` if you want to edit. The governance dashboard shows requests, spend, and the budget rejections you just caused.
 
 Raw metrics: <http://localhost:9090>, or `curl localhost:8080/actuator/prometheus`.
 
