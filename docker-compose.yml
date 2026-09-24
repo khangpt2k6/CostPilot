@@ -139,12 +139,27 @@ services:
     depends_on:
       - gateway
 
+  # 4.3: the console (Next.js). Proxies /api, /admin, /auth, /oauth2, /v1 to the gateway so
+  # the session cookie stays first-party. http://localhost:3000
+  web:
+    build:
+      context: ./web
+      args:
+        GATEWAY_URL: http://gateway:8080
+        NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+    container_name: costpilot-web
+    ports:
+      - "${COSTPILOT_WEB_PORT:-3000}:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+
   grafana:
     image: grafana/grafana:11.1.0
     container_name: costpilot-grafana
     ports:
-      # override the host port when 3000 is taken: COSTPILOT_GRAFANA_PORT=3300 docker compose up
-      - "${COSTPILOT_GRAFANA_PORT:-3000}:3000"
+      # 3000 belongs to the console now; override with COSTPILOT_GRAFANA_PORT if 3300 is taken
+      - "${COSTPILOT_GRAFANA_PORT:-3300}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
