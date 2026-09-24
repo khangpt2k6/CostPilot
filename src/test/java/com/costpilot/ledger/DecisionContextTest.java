@@ -1,5 +1,7 @@
 package com.costpilot.ledger;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
@@ -12,7 +14,7 @@ import com.costpilot.policy.PolicyDecision;
 class DecisionContextTest {
 
 	private static LedgerContext ledger() {
-		return new LedgerContext(null, "team-a", "proj-a", "user-a", "prod", UUID.randomUUID().toString());
+		return new LedgerContext(AuthTestSupport.TENANT, "team-a", "proj-a", "user-a", "prod", UUID.randomUUID().toString());
 	}
 
 	@Test

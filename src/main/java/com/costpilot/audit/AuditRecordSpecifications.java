@@ -16,10 +16,13 @@ public final class AuditRecordSpecifications {
 	private AuditRecordSpecifications() {
 	}
 
-	public static Specification<AuditRecord> filter(String teamId, String projectId, String decision,
-			Instant from, Instant to) {
+	// 4.1: tenantId is mandatory - the audit trail is never queried across tenants
+	public static Specification<AuditRecord> filter(String tenantId, String teamId, String projectId,
+			String decision, Instant from, Instant to) {
+		java.util.Objects.requireNonNull(tenantId, "tenantId");
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
+			predicates.add(cb.equal(root.get("tenantId"), tenantId));
 			if (teamId != null) {
 				predicates.add(cb.equal(root.get("teamId"), teamId));
 			}

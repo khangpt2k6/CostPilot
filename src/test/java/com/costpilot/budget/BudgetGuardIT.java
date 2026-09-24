@@ -94,7 +94,7 @@ class BudgetGuardIT {
 
 	private String newTeamWithBudget(String limit) {
 		String team = "guard-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal(limit)));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal(limit)));
 		return team;
 	}
 
@@ -108,7 +108,7 @@ class BudgetGuardIT {
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYMENT_REQUIRED);
 		assertThat(response.getBody()).contains("\"type\":\"budget_exceeded\"");
 		assertThat(response.getBody()).contains("\"code\":\"team\"");
-		assertThat(usageRepository.totalCostForTeam(team)).isEqualByComparingTo("0");
+		assertThat(usageRepository.totalCostForTeam(AuthTestSupport.TENANT, team)).isEqualByComparingTo("0");
 	}
 
 	@Test
@@ -151,14 +151,14 @@ class BudgetGuardIT {
 		}
 
 		Thread.sleep(500); // let ledger writes settle
-		BigDecimal spent = usageRepository.totalCostForTeam(team);
+		BigDecimal spent = usageRepository.totalCostForTeam(AuthTestSupport.TENANT, team);
 
 		assertThat(served.get()).isGreaterThan(0);
 		assertThat(blocked.get()).isGreaterThan(0);
 		assertThat(served.get() + blocked.get()).isEqualTo(flood);
 		// the headline property: total actual spend never exceeds the cap
 		assertThat(spent).isLessThanOrEqualTo(new BigDecimal("0.0002"));
-		assertThat(budgetService.remaining(BudgetScope.TEAM, team)).isGreaterThanOrEqualTo(BigDecimal.ZERO);
+		assertThat(budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team)).isGreaterThanOrEqualTo(BigDecimal.ZERO);
 	}
 
 	@Test
@@ -178,7 +178,7 @@ class BudgetGuardIT {
 					List.of(new CanonicalChatRequest.Message("user", "hello")), 128, false);
 
 			BudgetGuard.GuardResult result = deadGuard.reserve(request,
-					new LedgerContext(null, team, null, null, null, "fail-open-" + team));
+					new LedgerContext(AuthTestSupport.TENANT, team, null, null, null, "fail-open-" + team));
 
 			assertThat(result.failOpen()).isTrue();
 			assertThat(result.reservations()).isEmpty();
@@ -193,7 +193,7 @@ class BudgetGuardIT {
 		String team = newTeamWithBudget("100");
 		CanonicalChatRequest request = new CanonicalChatRequest("gpt-4o-mini",
 				List.of(new CanonicalChatRequest.Message("user", "hello costpilot")), 128, false);
-		LedgerContext context = new LedgerContext(null, team, null, null, null, "latency");
+		LedgerContext context = new LedgerContext(AuthTestSupport.TENANT, team, null, null, null, "latency");
 
 		for (int i = 0; i < 20; i++) {
 			guard.release(guard.reserve(request, context)); // warm up: rebuild + script load + caches

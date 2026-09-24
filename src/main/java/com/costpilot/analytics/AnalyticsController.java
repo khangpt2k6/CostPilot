@@ -25,7 +25,8 @@ import com.costpilot.security.CurrentPrincipal;
 // All endpoints take an optional [from,to) window (default: last 30 days). Available only
 // when ClickHouse is enabled.
 // 6.1: per-team isolation - a non-admin key is confined to its own team_id, applied as a
-// predicate INSIDE the ClickHouse dedup query (not a post-filter); a tenant-admin sees all.
+// predicate INSIDE the ClickHouse dedup query (not a post-filter); a tenant-admin sees all
+// teams. 4.1: every query is also confined to the caller's tenant, admin or not.
 @RestController
 @RequestMapping("/api/analytics")
 @ConditionalOnProperty(name = "costpilot.clickhouse.enabled", havingValue = "true")
@@ -36,6 +37,10 @@ public class AnalyticsController {
 	private static String teamScope() {
 		AuthenticatedPrincipal principal = CurrentPrincipal.require();
 		return principal.admin() ? null : principal.teamId();
+	}
+
+	private static String tenant() {
+		return CurrentPrincipal.require().tenantId();
 	}
 
 	private final AnalyticsQueryService analytics;
@@ -49,7 +54,7 @@ public class AnalyticsController {
 			@RequestParam(defaultValue = "team") String groupBy,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.spendByDimension(groupBy, from(from), to(to), teamScope());
+		return analytics.spendByDimension(groupBy, from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/top-spenders")
@@ -58,14 +63,14 @@ public class AnalyticsController {
 			@RequestParam(defaultValue = "10") int limit,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.topSpenders(dimension, Math.min(Math.max(limit, 1), 100), from(from), to(to), teamScope());
+		return analytics.topSpenders(dimension, Math.min(Math.max(limit, 1), 100), from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/decisions")
 	public DecisionCounts decisions(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.decisionCounts(from(from), to(to), teamScope());
+		return analytics.decisionCounts(from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/trends")
@@ -73,7 +78,7 @@ public class AnalyticsController {
 			@RequestParam(defaultValue = "day") String interval,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.trends(interval, from(from), to(to), teamScope());
+		return analytics.trends(interval, from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/budget-utilization")
@@ -81,21 +86,21 @@ public class AnalyticsController {
 			@RequestParam(defaultValue = "team") String scope,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.budgetUtilization(scope, from(from), to(to), teamScope());
+		return analytics.budgetUtilization(scope, from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/savings")
 	public SavingsSummary savings(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.savings(from(from), to(to), teamScope());
+		return analytics.savings(from(from), to(to), tenant(), teamScope());
 	}
 
 	@GetMapping("/reconcile")
 	public ReconciliationResult reconcile(
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-		return analytics.reconcile(from(from), to(to), teamScope());
+		return analytics.reconcile(from(from), to(to), tenant(), teamScope());
 	}
 
 	private static Instant from(Instant from) {

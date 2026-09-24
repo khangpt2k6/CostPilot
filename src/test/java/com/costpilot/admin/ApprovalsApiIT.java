@@ -49,7 +49,7 @@ class ApprovalsApiIT {
 
 	// trigger a park: a rule that requires approval for the requested model
 	private String parkRequest(String team) throws Exception {
-		policyService.upsertRule("team", team, "gpt-4o-mini", "require_approval", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "require_approval", null);
 		HttpHeaders h = admin();
 		h.set("X-Team-ID", team);
 		String body = """

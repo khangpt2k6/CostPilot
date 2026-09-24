@@ -22,12 +22,12 @@ class LedgerScopedSpendReader implements ScopedSpendReader {
 	}
 
 	@Override
-	public BigDecimal totalCostFor(BudgetScope scope, String ref) {
+	public BigDecimal totalCostFor(String tenant, BudgetScope scope, String ref) {
 		return switch (scope) {
-			case TENANT -> usage.totalCostForTenant(ref);
-			case TEAM -> usage.totalCostForTeam(ref);
-			case PROJECT -> usage.totalCostForProject(ref);
-			case MODEL -> usage.totalCostForModel(ref);
+			case TENANT -> usage.totalCostForTenant(tenant);
+			case TEAM -> usage.totalCostForTeam(tenant, ref);
+			case PROJECT -> usage.totalCostForProject(tenant, ref);
+			case MODEL -> usage.totalCostForModel(tenant, ref);
 		};
 	}
 }

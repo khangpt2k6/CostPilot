@@ -12,11 +12,11 @@ public interface PendingApprovalRepository extends JpaRepository<PendingApproval
 	// list-pending for the approvals API (9.2), newest first
 	List<PendingApproval> findByStateOrderByCreatedAtDesc(PendingApproval.State state);
 
-	// team-scoped list so a non-admin only sees its own team's pending requests
-	List<PendingApproval> findByTeamIdAndStateOrderByCreatedAtDesc(String teamId, PendingApproval.State state);
+	// 4.1: tenant-scoped list - an admin only ever sees its own tenant's pending requests
+	List<PendingApproval> findByTenantIdAndStateOrderByCreatedAtDesc(String tenantId, PendingApproval.State state);
 
-	// isolation: fetch a specific pending request only within the caller's team
-	Optional<PendingApproval> findByIdAndTeamId(UUID id, String teamId);
+	// 4.1 isolation: fetch a specific pending request only within the caller's tenant
+	Optional<PendingApproval> findByIdAndTenantId(UUID id, String tenantId);
 
 	// the expiry sweep: pending rows past their TTL
 	List<PendingApproval> findByStateAndExpiresAtBefore(PendingApproval.State state, Instant cutoff);

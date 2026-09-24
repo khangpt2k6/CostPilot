@@ -44,18 +44,21 @@ public class BudgetService {
 		this.spend = spend;
 	}
 
-	public static String counterKey(BudgetScope scope, String ref) {
-		return "budget:remaining:" + scope.dbValue() + ":" + ref;
+	// 4.1: keys are tenant-qualified so same-named teams in two tenants never share a
+	// counter. The tenant sits in a {hash tag} so all of one tenant's keys land on the
+	// same Redis Cluster slot.
+	public static String counterKey(String tenant, BudgetScope scope, String ref) {
+		return "budget:remaining:{" + tenant + "}:" + scope.dbValue() + ":" + ref;
 	}
 
 	/** Budget limit mirrored next to the counter so the guard's Lua stays Redis-only. */
-	public static String limitKey(BudgetScope scope, String ref) {
-		return "budget:limit:" + scope.dbValue() + ":" + ref;
+	public static String limitKey(String tenant, BudgetScope scope, String ref) {
+		return "budget:limit:{" + tenant + "}:" + scope.dbValue() + ":" + ref;
 	}
 
 	/** Short-lived negative cache: "no budget governs this scope", spares hot-path DB hits. */
-	public static String noneKey(BudgetScope scope, String ref) {
-		return "budget:none:" + scope.dbValue() + ":" + ref;
+	public static String noneKey(String tenant, BudgetScope scope, String ref) {
+		return "budget:none:{" + tenant + "}:" + scope.dbValue() + ":" + ref;
 	}
 
 	/**
@@ -63,26 +66,27 @@ public class BudgetService {
 	 * Called once per fresh ledger insert - ledger idempotency is what keeps
 	 * these counters replay-safe.
 	 */
-	public void charge(BudgetScope scope, String ref, BigDecimal amount) {
-		if (ref == null || ref.isBlank()) {
+	public void charge(String tenant, BudgetScope scope, String ref, BigDecimal amount) {
+		if (tenant == null || tenant.isBlank() || ref == null || ref.isBlank()) {
 			return;
 		}
-		Optional<Budget> budget = budgets.findByScopeTypeAndScopeRefAndActiveTrue(scope.dbValue(), ref);
+		Optional<Budget> budget = budgets.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant,
+				scope.dbValue(), ref);
 		if (budget.isEmpty()) {
 			return; // nothing governs this scope - no counter to maintain
 		}
-		String key = counterKey(scope, ref);
+		String key = counterKey(tenant, scope, ref);
 		Long remaining = redis.execute(CHARGE_IF_PRESENT, List.of(key), Long.toString(toNanos(amount)));
 		if (remaining == null) {
 			// cold start: the ledger row for this charge is already committed, so a
 			// rebuild from the ledger includes it - do NOT also decrement
-			BigDecimal rebuilt = rebuild(scope, ref);
-			log.info("budget counter cold-start rebuild scope={} ref={} remaining={}",
-					scope.dbValue(), ref, rebuilt.toPlainString());
+			BigDecimal rebuilt = rebuild(tenant, scope, ref);
+			log.info("budget counter cold-start rebuild tenant={} scope={} ref={} remaining={}",
+					tenant, scope.dbValue(), ref, rebuilt.toPlainString());
 			return;
 		}
-		log.debug("budget charge scope={} ref={} amount={} remaining={}",
-				scope.dbValue(), ref, amount.toPlainString(), fromNanos(remaining).toPlainString());
+		log.debug("budget charge tenant={} scope={} ref={} amount={} remaining={}",
+				tenant, scope.dbValue(), ref, amount.toPlainString(), fromNanos(remaining).toPlainString());
 	}
 
 	/**
@@ -93,19 +97,22 @@ public class BudgetService {
 	 * installs the counter with SETNX - a stale counter would otherwise survive the
 	 * limit change. Returns the fresh remaining.
 	 */
-	public BigDecimal upsertLimit(BudgetScope scope, String ref, BigDecimal limitAmount) {
-		Budget budget = budgets.findByScopeTypeAndScopeRef(scope.dbValue(), ref)
+	public BigDecimal upsertLimit(String tenant, BudgetScope scope, String ref, BigDecimal limitAmount) {
+		if (scope == BudgetScope.TENANT && !tenant.equals(ref)) {
+			throw new IllegalArgumentException("a tenant budget can only govern its own tenant");
+		}
+		Budget budget = budgets.findByTenantIdAndScopeTypeAndScopeRef(tenant, scope.dbValue(), ref)
 				.map(existing -> {
 					existing.setLimitAmount(limitAmount);
 					existing.setActive(true);
 					return existing;
 				})
-				.orElseGet(() -> new Budget(scope.dbValue(), ref, limitAmount));
+				.orElseGet(() -> new Budget(tenant, scope.dbValue(), ref, limitAmount));
 		budgets.save(budget);
-		evictCounter(scope, ref);
-		BigDecimal remaining = rebuild(scope, ref);
-		log.info("budget upserted scope={} ref={} limit={} remaining={}",
-				scope.dbValue(), ref, limitAmount.toPlainString(), remaining.toPlainString());
+		evictCounter(tenant, scope, ref);
+		BigDecimal remaining = rebuild(tenant, scope, ref);
+		log.info("budget upserted tenant={} scope={} ref={} limit={} remaining={}",
+				tenant, scope.dbValue(), ref, limitAmount.toPlainString(), remaining.toPlainString());
 		return remaining;
 	}
 
@@ -113,56 +120,57 @@ public class BudgetService {
 	 * 9.1 admin CRUD: deactivate a budget so it no longer governs. The counter and limit
 	 * mirror are removed; the scope reverts to ungoverned (charges become no-ops).
 	 */
-	public void deactivate(BudgetScope scope, String ref) {
-		budgets.findByScopeTypeAndScopeRefAndActiveTrue(scope.dbValue(), ref).ifPresent(budget -> {
-			budget.setActive(false);
-			budgets.save(budget);
-		});
-		redis.delete(counterKey(scope, ref));
-		redis.delete(limitKey(scope, ref));
-		redis.delete(noneKey(scope, ref));
-		log.info("budget deactivated scope={} ref={}", scope.dbValue(), ref);
+	public void deactivate(String tenant, BudgetScope scope, String ref) {
+		budgets.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scope.dbValue(), ref)
+				.ifPresent(budget -> {
+					budget.setActive(false);
+					budgets.save(budget);
+				});
+		redis.delete(counterKey(tenant, scope, ref));
+		redis.delete(limitKey(tenant, scope, ref));
+		redis.delete(noneKey(tenant, scope, ref));
+		log.info("budget deactivated tenant={} scope={} ref={}", tenant, scope.dbValue(), ref);
 	}
 
 	// drop the mirrored counter + negative cache so rebuild's SETNX installs a fresh value
-	private void evictCounter(BudgetScope scope, String ref) {
-		redis.delete(counterKey(scope, ref));
-		redis.delete(noneKey(scope, ref));
+	private void evictCounter(String tenant, BudgetScope scope, String ref) {
+		redis.delete(counterKey(tenant, scope, ref));
+		redis.delete(noneKey(tenant, scope, ref));
 	}
 
 	/** Live remaining for a scope; rebuilds from the ledger if the counter is gone. */
-	public BigDecimal remaining(BudgetScope scope, String ref) {
-		String value = redis.opsForValue().get(counterKey(scope, ref));
+	public BigDecimal remaining(String tenant, BudgetScope scope, String ref) {
+		String value = redis.opsForValue().get(counterKey(tenant, scope, ref));
 		if (value != null) {
 			return fromNanos(Long.parseLong(value));
 		}
-		return rebuild(scope, ref);
+		return rebuild(tenant, scope, ref);
 	}
 
 	/**
 	 * Recompute remaining = limit - ledger spend and install it. SETNX so a
 	 * concurrent rebuild/charge that got there first is never clobbered.
 	 */
-	public BigDecimal rebuild(BudgetScope scope, String ref) {
-		Budget budget = budgets.findByScopeTypeAndScopeRefAndActiveTrue(scope.dbValue(), ref)
+	public BigDecimal rebuild(String tenant, BudgetScope scope, String ref) {
+		Budget budget = budgets.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scope.dbValue(), ref)
 				.orElseThrow(() -> new IllegalArgumentException(
-						"no active budget for scope=" + scope.dbValue() + " ref=" + ref));
-		BigDecimal spent = spentFromLedger(scope, ref);
+						"no active budget for tenant=" + tenant + " scope=" + scope.dbValue() + " ref=" + ref));
+		BigDecimal spent = spentFromLedger(tenant, scope, ref);
 		BigDecimal remaining = budget.getLimitAmount().subtract(spent);
-		String key = counterKey(scope, ref);
-		redis.opsForValue().set(limitKey(scope, ref), Long.toString(toNanos(budget.getLimitAmount())));
+		String key = counterKey(tenant, scope, ref);
+		redis.opsForValue().set(limitKey(tenant, scope, ref), Long.toString(toNanos(budget.getLimitAmount())));
 		redis.opsForValue().setIfAbsent(key, Long.toString(toNanos(remaining)));
 		return fromNanos(Long.parseLong(redis.opsForValue().get(key)));
 	}
 
 	/** Ledger truth for a scope - what reconciliation checks counters against. */
-	public BigDecimal spentFromLedger(BudgetScope scope, String ref) {
-		return spend.totalCostFor(scope, ref);
+	public BigDecimal spentFromLedger(String tenant, BudgetScope scope, String ref) {
+		return spend.totalCostFor(tenant, scope, ref);
 	}
 
 	/** Live remaining in nanodollars, or null when no counter exists (no rebuild attempted). */
-	public Long remainingNanos(BudgetScope scope, String ref) {
-		String value = redis.opsForValue().get(counterKey(scope, ref));
+	public Long remainingNanos(String tenant, BudgetScope scope, String ref) {
+		String value = redis.opsForValue().get(counterKey(tenant, scope, ref));
 		return value == null ? null : Long.parseLong(value);
 	}
 

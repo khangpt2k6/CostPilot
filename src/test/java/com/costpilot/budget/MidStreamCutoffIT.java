@@ -61,7 +61,7 @@ class MidStreamCutoffIT {
 	@Test
 	void generationIsCutOffCleanlyTheInstantItWouldBreachBudget(CapturedOutput output) throws Exception {
 		String team = "cutoff-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, CAP));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, CAP));
 
 		String content = "lorem ".repeat(WORDS).trim();
 		String body = """
@@ -113,7 +113,7 @@ class MidStreamCutoffIT {
 	@Test
 	void wellWithinBudgetStreamsRunToCompletionUntouched() throws Exception {
 		String team = "no-cutoff-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("10")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("10")));
 
 		String body = """
 				{

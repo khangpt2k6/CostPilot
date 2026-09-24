@@ -54,7 +54,7 @@ public class AdminAuditController {
 		Pageable pageable = PageRequest.of(Math.max(0, page), clampSize(size),
 				Sort.by(Sort.Direction.DESC, "createdAt"));
 		return repository.findAll(
-				AuditRecordSpecifications.filter(effectiveTeam, blankToNull(projectId),
+				AuditRecordSpecifications.filter(principal.tenantId(), effectiveTeam, blankToNull(projectId),
 						blankToNull(decision), from, to),
 				pageable)
 				.map(AuditRecordDto::from);
@@ -66,6 +66,7 @@ public class AdminAuditController {
 	public ResponseEntity<AuditRecordDto> byId(@PathVariable java.util.UUID id) {
 		AuthenticatedPrincipal principal = CurrentPrincipal.require();
 		return repository.findById(id)
+				.filter(row -> principal.tenantId().equals(row.getTenantId()))
 				.filter(row -> principal.admin() || principal.teamId().equals(row.getTeamId()))
 				.map(AuditRecordDto::from)
 				.map(ResponseEntity::ok)

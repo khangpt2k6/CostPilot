@@ -24,6 +24,7 @@ import jakarta.validation.constraints.Positive;
 
 /**
  * 9.1: manage budgets (tenant/team/project/model) without touching the DB by hand.
+ * 4.1: every read and write is confined to the caller's tenant.
  * ROLE_ADMIN only (enforced in SecurityConfig on /admin/**). Changes take effect at
  * runtime - a budget upsert rebuilds the live Redis counter - and every action is
  * recorded in the admin audit.
@@ -54,9 +55,10 @@ public class AdminBudgetController {
 
 	@GetMapping
 	public List<BudgetView> list() {
-		return budgets.findAll().stream()
+		String tenant = CurrentPrincipal.require().tenantId();
+		return budgets.findByTenantId(tenant).stream()
 				.map(b -> new BudgetView(b.getScopeType(), b.getScopeRef(), b.getLimitAmount(),
-						b.isActive() ? budgetService.remaining(
+						b.isActive() ? budgetService.remaining(tenant,
 								BudgetScope.fromDbValue(b.getScopeType()), b.getScopeRef()) : null,
 						b.isActive()))
 				.toList();
@@ -66,10 +68,10 @@ public class AdminBudgetController {
 	public BudgetView upsert(@RequestBody UpsertRequest request) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
 		BudgetScope scope = BudgetScope.fromDbValue(request.scope());
-		String old = budgets.findByScopeTypeAndScopeRef(scope.dbValue(), request.ref())
+		String old = budgets.findByTenantIdAndScopeTypeAndScopeRef(actor.tenantId(), scope.dbValue(), request.ref())
 				.map(b -> b.getLimitAmount().toPlainString() + (b.isActive() ? "" : " (inactive)"))
 				.orElse(null);
-		BigDecimal remaining = budgetService.upsertLimit(scope, request.ref(), request.limit());
+		BigDecimal remaining = budgetService.upsertLimit(actor.tenantId(), scope, request.ref(), request.limit());
 		adminAudit.record(actor.tenantId(), "budget.upsert", scope.dbValue(), request.ref(),
 				old, request.limit().toPlainString());
 		return new BudgetView(scope.dbValue(), request.ref(), request.limit(), remaining, true);
@@ -79,10 +81,10 @@ public class AdminBudgetController {
 	public void deactivate(@RequestParam String scope, @RequestParam String ref) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
 		BudgetScope parsed = BudgetScope.fromDbValue(scope);
-		String old = budgets.findByScopeTypeAndScopeRefAndActiveTrue(parsed.dbValue(), ref)
+		String old = budgets.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(actor.tenantId(), parsed.dbValue(), ref)
 				.map(b -> b.getLimitAmount().toPlainString())
 				.orElse(null);
-		budgetService.deactivate(parsed, ref);
+		budgetService.deactivate(actor.tenantId(), parsed, ref);
 		adminAudit.record(actor.tenantId(), "budget.deactivate", parsed.dbValue(), ref, old, null);
 	}
 }

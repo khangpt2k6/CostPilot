@@ -100,7 +100,7 @@ class AuditTrailIT {
 	@Test
 	void policyDowngradeIsFullyExplained() throws Exception {
 		String team = "audit-poldown-" + UUID.randomUUID();
-		var rule = policyService.upsertRule("team", team, "gpt-4o-mini", "downgrade", "gpt-4o-mini");
+		var rule = policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "downgrade", "gpt-4o-mini");
 
 		assertThat(post(team, "gpt-4o", 16).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -115,8 +115,8 @@ class AuditTrailIT {
 	@Test
 	void budgetDowngradeIsFullyExplained() throws Exception {
 		String team = "audit-budown-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("0.0005")));
-		policyService.upsertRule("team", team, "gpt-4o,gpt-4o-mini", "deny", null);
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.0005")));
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o,gpt-4o-mini", "deny", null);
 
 		assertThat(post(team, "gpt-4o", 256).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -131,7 +131,7 @@ class AuditTrailIT {
 	@Test
 	void denyProducesARejectedAuditRow() throws Exception {
 		String team = "audit-deny-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null);
 
 		assertThat(post(team, "claude-sonnet-4-5", 16).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
@@ -145,7 +145,7 @@ class AuditTrailIT {
 	@Test
 	void requireApprovalProducesARejectedAuditRow() throws Exception {
 		String team = "audit-appr-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "require_approval", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "require_approval", null);
 
 		// Stage 8: the request is parked (202), not rejected - but it still produces a
 		// require_approval audit row (nothing executed, so executedModel is null).
@@ -160,7 +160,7 @@ class AuditTrailIT {
 	void budgetHardBlockThatEscapesAs402IsAudited() throws Exception {
 		String team = "audit-402-" + UUID.randomUUID();
 		// cap so tiny nothing fits -> the original 402 escapes (PreflightDowngradeIT scenario)
-		budgets.save(new Budget("team", team, new BigDecimal("0.00000001")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.00000001")));
 
 		assertThat(post(team, "gpt-4o", 256).getStatusCode()).isEqualTo(HttpStatus.PAYMENT_REQUIRED);
 
@@ -176,7 +176,7 @@ class AuditTrailIT {
 		String team = "audit-cutoff-" + UUID.randomUUID();
 		// mirror MidStreamCutoffIT: a cap that the ~2000-token stream overruns mid-flight,
 		// no max_tokens so the reservation under-estimates and cutoff (4.3) fires
-		budgets.save(new Budget("team", team, new BigDecimal("0.0013")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.0013")));
 		String content = "lorem ".repeat(2000).trim();
 		String body = """
 				{

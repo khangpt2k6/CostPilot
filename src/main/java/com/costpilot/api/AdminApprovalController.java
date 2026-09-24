@@ -54,13 +54,15 @@ public class AdminApprovalController {
 
 	@GetMapping
 	public List<PendingView> listPending() {
-		return repository.findByStateOrderByCreatedAtDesc(PendingApproval.State.pending).stream()
+		return repository.findByTenantIdAndStateOrderByCreatedAtDesc(CurrentPrincipal.require().tenantId(),
+				PendingApproval.State.pending).stream()
 				.map(PendingView::of).toList();
 	}
 
 	@GetMapping("/{id}")
 	public ResponseEntity<?> get(@PathVariable UUID id) {
-		return repository.findById(id)
+		// 4.1: another tenant's approval reads as not found, never as forbidden
+		return repository.findByIdAndTenantId(id, CurrentPrincipal.require().tenantId())
 				.<ResponseEntity<?>>map(p -> ResponseEntity.ok(PendingView.of(p)))
 				.orElseGet(() -> ResponseEntity.notFound().build());
 	}
@@ -68,7 +70,7 @@ public class AdminApprovalController {
 	@PostMapping("/{id}/approve")
 	public ResponseEntity<?> approve(@PathVariable UUID id) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
-		PendingApproval pending = repository.findById(id).orElse(null);
+		PendingApproval pending = repository.findByIdAndTenantId(id, actor.tenantId()).orElse(null);
 		if (pending == null) {
 			return ResponseEntity.notFound().build();
 		}
@@ -84,7 +86,7 @@ public class AdminApprovalController {
 	@PostMapping("/{id}/reject")
 	public ResponseEntity<?> reject(@PathVariable UUID id, @RequestBody(required = false) RejectRequest body) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
-		PendingApproval pending = repository.findById(id).orElse(null);
+		PendingApproval pending = repository.findByIdAndTenantId(id, actor.tenantId()).orElse(null);
 		if (pending == null) {
 			return ResponseEntity.notFound().build();
 		}

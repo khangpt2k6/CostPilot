@@ -19,6 +19,10 @@ public class Budget {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
+	// 4.1: owning tenant (by name, as the ledger stores it). Budgets never cross tenants.
+	@Column(name = "tenant_id", nullable = false, columnDefinition = "text")
+	private String tenantId;
+
 	@Column(name = "scope_type", nullable = false, columnDefinition = "text")
 	private String scopeType;
 
@@ -40,7 +44,8 @@ public class Budget {
 	protected Budget() {
 	}
 
-	public Budget(String scopeType, String scopeRef, BigDecimal limitAmount) {
+	public Budget(String tenantId, String scopeType, String scopeRef, BigDecimal limitAmount) {
+		this.tenantId = tenantId;
 		this.scopeType = scopeType;
 		this.scopeRef = scopeRef;
 		this.limitAmount = limitAmount;
@@ -58,6 +63,10 @@ public class Budget {
 
 	public UUID getId() {
 		return id;
+	}
+
+	public String getTenantId() {
+		return tenantId;
 	}
 
 	public String getScopeType() {

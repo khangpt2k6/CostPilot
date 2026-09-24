@@ -17,9 +17,10 @@ import java.math.BigDecimal;
 public interface ScopedSpendReader {
 
 	/**
-	 * Total settled cost recorded against {@code ref} for the given scope.
+	 * Total settled cost recorded against {@code ref} for the given scope, inside one tenant.
+	 * 4.1: refs are names and only unique within a tenant, so the tenant is part of the key.
 	 *
 	 * @return the total, never null - an unknown or unused ref reads as zero
 	 */
-	BigDecimal totalCostFor(BudgetScope scope, String ref);
+	BigDecimal totalCostFor(String tenant, BudgetScope scope, String ref);
 }

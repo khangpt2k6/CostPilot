@@ -40,7 +40,7 @@ class TeamIsolationIT {
 
 	private AuditRecord row(String team, String decision) {
 		return AuditRecord.builder()
-				.teamId(team).projectId("proj")
+				.tenantId(AuthTestSupport.TENANT).teamId(team).projectId("proj")
 				.requestedModel("gpt-4o").executedModel("gpt-4o")
 				.decision(decision)
 				.build();

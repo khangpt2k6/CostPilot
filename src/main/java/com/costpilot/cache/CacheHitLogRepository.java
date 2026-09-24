@@ -31,19 +31,20 @@ public class CacheHitLogRepository {
 				tenantId, teamId, savingsNanos);
 	}
 
-	public long totalSavingsNanosBetween(Instant from, Instant to) {
+	// 4.1: savings are always read inside one tenant
+	public long totalSavingsNanosBetween(String tenant, Instant from, Instant to) {
 		Long n = jdbc.queryForObject("""
 				select coalesce(sum(savings_nanos), 0) from cache_hit_log
-				where created_at >= ? and created_at < ?
-				""", Long.class, ts(from), ts(to));
+				where tenant_id = ? and created_at >= ? and created_at < ?
+				""", Long.class, tenant, ts(from), ts(to));
 		return n == null ? 0L : n;
 	}
 
-	public long totalSavingsNanosForTeamBetween(String team, Instant from, Instant to) {
+	public long totalSavingsNanosForTeamBetween(String tenant, String team, Instant from, Instant to) {
 		Long n = jdbc.queryForObject("""
 				select coalesce(sum(savings_nanos), 0) from cache_hit_log
-				where team_id = ? and created_at >= ? and created_at < ?
-				""", Long.class, team, ts(from), ts(to));
+				where tenant_id = ? and team_id = ? and created_at >= ? and created_at < ?
+				""", Long.class, tenant, team, ts(from), ts(to));
 		return n == null ? 0L : n;
 	}
 

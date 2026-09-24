@@ -71,8 +71,8 @@ reset_state() {
 	local cap="$1"
 	$PSQL -v ON_ERROR_STOP=1 -q <<SQL
 delete from usage_record where team_id = 'validation';
-delete from budget where scope_type = 'team' and scope_ref = 'validation';
-insert into budget (scope_type, scope_ref, limit_amount) values ('team', 'validation', ${cap});
+delete from budget where tenant_id = 'acme' and scope_type = 'team' and scope_ref = 'validation';
+insert into budget (tenant_id, scope_type, scope_ref, limit_amount) values ('acme', 'team', 'validation', ${cap});
 SQL
 	# stale counters/negative-caches would mask the fresh cap; safe to flush — Redis budget
 	# counters rebuild from (limit - ledger spend) on demand.

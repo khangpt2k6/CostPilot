@@ -106,8 +106,8 @@ class PreflightDowngradeIT {
 		String team = "downgrade-" + UUID.randomUUID();
 		// gpt-4o estimate at max_tokens=256 is ~0.00256; gpt-4o-mini is ~0.000154.
 		// cap 0.0005 blocks gpt-4o but fits mini
-		budgets.save(new Budget("team", team, new BigDecimal("0.0005")));
-		policyService.upsertRule("team", team, "gpt-4o,gpt-4o-mini", "deny", null);
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.0005")));
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o,gpt-4o-mini", "deny", null);
 
 		ResponseEntity<String> response = post(team, "gpt-4o", 256);
 
@@ -129,9 +129,9 @@ class PreflightDowngradeIT {
 	@Test
 	void downgradeNeverPicksAPolicyForbiddenModel() {
 		String team = "downgrade-policy-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("0.0005")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.0005")));
 		// only gpt-4o is allowed - the cheaper models exist but policy forbids them
-		policyService.upsertRule("team", team, "gpt-4o", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o", "deny", null);
 
 		ResponseEntity<String> response = post(team, "gpt-4o", 256);
 
@@ -142,7 +142,7 @@ class PreflightDowngradeIT {
 	@Test
 	void whenNothingFitsTheOriginal402Escapes() {
 		String team = "nofit-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("0.00000001")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.00000001")));
 
 		ResponseEntity<String> response = post(team, "gpt-4o", 256);
 

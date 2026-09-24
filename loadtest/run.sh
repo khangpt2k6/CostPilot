@@ -42,10 +42,10 @@ echo "== resetting load-test state (lt-* teams only)"
 $PSQL -q <<'SQL'
 delete from usage_record where team_id like 'lt-%';
 delete from budget where scope_ref like 'lt-%';
-insert into budget (scope_type, scope_ref, limit_amount)
-select 'team', 'lt-latency-' || n, 1000        from generate_series(0, 9) n union all
-select 'team', 'lt-flood-'   || n, 0.0002      from generate_series(0, 9) n union all
-select 'team', 'lt-cutoff-'  || n, 0.0013      from generate_series(0, 9) n;
+insert into budget (tenant_id, scope_type, scope_ref, limit_amount)
+select 'acme', 'team', 'lt-latency-' || n, 1000        from generate_series(0, 9) n union all
+select 'acme', 'team', 'lt-flood-'   || n, 0.0002      from generate_series(0, 9) n union all
+select 'acme', 'team', 'lt-cutoff-'  || n, 0.0013      from generate_series(0, 9) n;
 SQL
 # stale lt-* counters/negative-caches from a previous run would mask the fresh caps.
 # flushing everything is safe by design: counters rebuild from the ledger on demand.
@@ -80,7 +80,7 @@ from (
 ) b
 join lateral (
     select coalesce(sum(u.cost), 0) as spent
-    from usage_record u where u.team_id = b.scope_ref
+    from usage_record u where u.tenant_id = b.tenant_id and u.team_id = b.scope_ref
 ) s on true
 group by 1 order by 1;
 SQL
