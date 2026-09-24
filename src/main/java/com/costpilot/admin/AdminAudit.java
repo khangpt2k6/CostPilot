@@ -22,6 +22,10 @@ public class AdminAudit {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
+	// 4.2: the tenant the action happened in (actor is now the person/key who did it)
+	@Column(name = "tenant_id", columnDefinition = "text")
+	private String tenantId;
+
 	@Column(nullable = false, columnDefinition = "text")
 	private String actor;
 
@@ -46,8 +50,9 @@ public class AdminAudit {
 	protected AdminAudit() {
 	}
 
-	public AdminAudit(String actor, String action, String targetType, String targetRef,
+	public AdminAudit(String tenantId, String actor, String action, String targetType, String targetRef,
 			String oldValue, String newValue) {
+		this.tenantId = tenantId;
 		this.actor = actor;
 		this.action = action;
 		this.targetType = targetType;
@@ -58,6 +63,10 @@ public class AdminAudit {
 
 	public UUID getId() {
 		return id;
+	}
+
+	public String getTenantId() {
+		return tenantId;
 	}
 
 	public String getActor() {

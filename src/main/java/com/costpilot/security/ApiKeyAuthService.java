@@ -74,6 +74,11 @@ public class ApiKeyAuthService {
 		return principal;
 	}
 
+	/** 4.2: forget a cached principal right away (key revoked on this instance). */
+	public void evict(String keyHash) {
+		cache.remove(keyHash);
+	}
+
 	private AuthenticatedPrincipal resolve(ApiKey key) {
 		Team team = teams.findById(key.getTeamId())
 				.orElseThrow(() -> new InvalidApiKeyException("api key references a missing team"));
@@ -84,6 +89,6 @@ public class ApiKeyAuthService {
 				.map(Project::getName)
 				.orElse(null);
 		return new AuthenticatedPrincipal(tenant.getName(), team.getName(), projectName,
-				team.getId(), key.isAdmin(), tenant.getId());
+				team.getId(), key.isAdmin(), tenant.getId(), "key:" + key.getName());
 	}
 }

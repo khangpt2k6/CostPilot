@@ -100,6 +100,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	// 6.1: real API-key auth + per-team isolation on the admin/analytics surfaces
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// 4.2: GitHub/Google login for the console (session auth; API keys unchanged)
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	testImplementation 'org.springframework.security:spring-security-test'
 	// 5.2: append-only usage events off the hot path
 	implementation 'org.springframework.kafka:spring-kafka'

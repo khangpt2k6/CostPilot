@@ -42,6 +42,10 @@ public class ApiKey {
 	@Column(name = "is_admin", nullable = false)
 	private boolean admin;
 
+	// 4.2: first 12 chars of the raw key, so a list can tell keys apart; null for old keys
+	@Column(name = "key_prefix", columnDefinition = "text")
+	private String keyPrefix;
+
 	protected ApiKey() {
 	}
 
@@ -91,5 +95,20 @@ public class ApiKey {
 
 	public boolean isAdmin() {
 		return admin;
+	}
+
+	public String getKeyPrefix() {
+		return keyPrefix;
+	}
+
+	public void setKeyPrefix(String keyPrefix) {
+		this.keyPrefix = keyPrefix;
+	}
+
+	// 4.2: revocation is permanent; a revoked key never authenticates again
+	public void revoke() {
+		if (revokedAt == null) {
+			revokedAt = Instant.now();
+		}
 	}
 }

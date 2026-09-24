@@ -46,6 +46,15 @@ spring:
 
 server:
   port: 8080
+  # 4.2: the console runs behind the dashboard's proxy; honor X-Forwarded-* so OAuth
+  # redirect URIs point at the public host, not the internal one
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: 12h
+      cookie:
+        http-only: true
+        same-site: lax
 
 costpilot:
   # 6.1: server-side pepper for API-key hashing (HMAC-SHA256). The dev default lets
@@ -54,6 +63,18 @@ costpilot:
   # this exact dev value - change it and the seeded keys stop resolving.
   security:
     api-key-pepper: ${COSTPILOT_API_KEY_PEPPER:costpilot-dev-pepper}
+  # 4.2: console login. OAuth providers are enabled by setting their client id/secret, e.g.
+  #   SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_ID / _CLIENT_SECRET
+  #   SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID / _CLIENT_SECRET
+  # dev-login signs in by email with NO password: localhost only, never on a public host.
+  auth:
+    dev-login:
+      enabled: ${COSTPILOT_AUTH_DEV_LOGIN_ENABLED:false}
+    # localhost demo: new users also join this tenant as admin so the dashboard has data
+    demo-tenant: ${COSTPILOT_AUTH_DEMO_TENANT:}
+  # where the dashboard lives; OAuth success + invite links point here ("" = same origin)
+  web:
+    base-url: ${COSTPILOT_WEB_BASE_URL:}
   # 5.2: append-only usage events -> Kafka (off the hot path). Disabled by default.
   kafka:
     enabled: ${COSTPILOT_KAFKA_ENABLED:false}

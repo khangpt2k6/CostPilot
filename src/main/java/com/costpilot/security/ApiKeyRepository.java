@@ -1,5 +1,7 @@
 package com.costpilot.security;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +13,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
 
 	Optional<ApiKey> findByKeyHash(String keyHash);
+
+	// 4.2: key list for a workspace = keys of all its teams
+	List<ApiKey> findByTeamIdInOrderByCreatedAtDesc(Collection<UUID> teamIds);
 }

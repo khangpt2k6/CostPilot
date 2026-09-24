@@ -60,6 +60,31 @@ public class GlobalExceptionHandler {
 		return badRequest(ex.getMessage());
 	}
 
+	// 4.2 console errors
+	@ExceptionHandler(java.util.NoSuchElementException.class)
+	ResponseEntity<ErrorResponse> handleNotFound(java.util.NoSuchElementException ex) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+				.body(new ErrorResponse(new ErrorResponse.ErrorBody(ex.getMessage(), "not_found", null)));
+	}
+
+	@ExceptionHandler(com.costpilot.account.WorkspaceRuleException.class)
+	ResponseEntity<ErrorResponse> handleWorkspaceRule(com.costpilot.account.WorkspaceRuleException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(new ErrorResponse(new ErrorResponse.ErrorBody(ex.getMessage(), "workspace_rule", null)));
+	}
+
+	@ExceptionHandler(com.costpilot.account.InviteUnavailableException.class)
+	ResponseEntity<ErrorResponse> handleInviteGone(com.costpilot.account.InviteUnavailableException ex) {
+		return ResponseEntity.status(HttpStatus.GONE)
+				.body(new ErrorResponse(new ErrorResponse.ErrorBody(ex.getMessage(), "invite_unavailable", null)));
+	}
+
+	@ExceptionHandler(com.costpilot.account.CurrentUser.NotAUserException.class)
+	ResponseEntity<ErrorResponse> handleNotAUser(com.costpilot.account.CurrentUser.NotAUserException ex) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+				.body(new ErrorResponse(new ErrorResponse.ErrorBody(ex.getMessage(), "login_required", null)));
+	}
+
 	private ResponseEntity<ErrorResponse> badRequest(String message) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRequest(message));
 	}

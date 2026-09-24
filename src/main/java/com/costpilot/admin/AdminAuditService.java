@@ -21,11 +21,13 @@ public class AdminAuditService {
 		this.repository = repository;
 	}
 
-	public AdminAudit record(String actor, String action, String targetType, String targetRef,
+	/** 4.2: tenant = where it happened, actor = who did it ("user:<email>" / "key:<name>"). */
+	public AdminAudit record(String tenantId, String actor, String action, String targetType, String targetRef,
 			String oldValue, String newValue) {
-		AdminAudit saved = repository.save(new AdminAudit(actor, action, targetType, targetRef, oldValue, newValue));
-		log.info("admin action actor={} action={} target={}:{} old={} new={}",
-				actor, action, targetType, targetRef, oldValue, newValue);
+		AdminAudit saved = repository.save(
+				new AdminAudit(tenantId, actor, action, targetType, targetRef, oldValue, newValue));
+		log.info("admin action tenant={} actor={} action={} target={}:{} old={} new={}",
+				tenantId, actor, action, targetType, targetRef, oldValue, newValue);
 		return saved;
 	}
 }

@@ -17,6 +17,12 @@ services:
       COSTPILOT_KAFKA_BOOTSTRAP: kafka:29092
       COSTPILOT_CLICKHOUSE_ENABLED: "true"
       COSTPILOT_CLICKHOUSE_HOST: clickhouse
+      # 4.2 console: passwordless dev-login + auto-join the seeded demo tenant. Local only.
+      COSTPILOT_AUTH_DEV_LOGIN_ENABLED: "true"
+      COSTPILOT_AUTH_DEMO_TENANT: acme
+      COSTPILOT_WEB_BASE_URL: ${COSTPILOT_WEB_BASE_URL:-http://localhost:3000}
+      # GitHub login: don't set these to empty strings here (Boot refuses to start with a
+      # blank client id). Put them in docker-compose.override.yml instead, see docs/README.md
       # Stage 10 semantic cache: opt-in spend reduction, off by default
       COSTPILOT_CACHE_ENABLED: ${COSTPILOT_CACHE_ENABLED:-false}
       COSTPILOT_UPSTREAM_MODE: ${COSTPILOT_UPSTREAM_MODE:-mock}

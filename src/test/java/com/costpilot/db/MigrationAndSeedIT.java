@@ -27,8 +27,8 @@ class MigrationAndSeedIT {
 				"select count(*) from flyway_schema_history where success = true", Integer.class);
 		Integer failed = jdbc.queryForObject(
 				"select count(*) from flyway_schema_history where success = false", Integer.class);
-		// bump this when adding a migration; V17 made budgets + policy rules tenant-scoped
-		assertThat(applied).isEqualTo(17);
+		// bump this when adding a migration; V18 added accounts + workspaces
+		assertThat(applied).isEqualTo(18);
 		assertThat(failed).isZero();
 	}
 
