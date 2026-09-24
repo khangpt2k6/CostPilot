@@ -27,7 +27,7 @@ const res = await cp.chat.completions.create({
 });
 
 res.choices[0].message.content;
-res.governance.modelDowngraded; // "gpt-4o -> gpt-4o-mini" when a policy or budget forced a cheaper model
+res.governance.modelDowngraded; // "gpt-4o -> gpt-4o-mini; reason=policy" when a policy or budget forced a cheaper model
 res.governance.modelRouted;     // cost-based routing picked a cheaper model that meets the bar
 res.governance.budgetWarning;   // set when a budget has under 20% left
 res.governance.cacheHit;        // served from the semantic cache at $0

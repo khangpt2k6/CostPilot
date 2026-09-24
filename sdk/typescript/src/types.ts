@@ -52,7 +52,7 @@ export interface Governance {
   budgetWarning: string | null;
   /** cost-based routing picked a cheaper model that meets the quality bar */
   modelRouted: string | null;
-  /** a policy or budget forced a cheaper model */
+  /** a policy or budget forced a cheaper model, e.g. "gpt-4o -> gpt-4o-mini; reason=policy" */
   modelDowngraded: string | null;
   /** every X-CostPilot-* header, lower-cased */
   headers: Record<string, string>;
