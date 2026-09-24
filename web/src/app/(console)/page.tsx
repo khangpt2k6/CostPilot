@@ -96,7 +96,7 @@ export default function OverviewPage() {
       <Card className="mt-6">
         <CardHeader title="Daily spend" sub="USD per day, settled cost from the ledger pipeline" />
         <div className="p-4">
-          {trend.data && trend.data.length > 0 ? <SpendTrend points={trend.data} /> : <Empty title="No spend in this range" />}
+          {trend.data && trend.data.length > 0 ? <SpendTrend points={trend.data} from={from} /> : <Empty title="No spend in this range" />}
         </div>
       </Card>
 

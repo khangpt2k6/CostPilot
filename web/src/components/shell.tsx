@@ -124,6 +124,18 @@ export function Shell({ children }: { children: ReactNode }) {
         {/* narrow screens: a compact top bar instead of the sidebar */}
         <header className="flex items-center gap-2 overflow-x-auto border-b border-line bg-panel px-4 py-2 md:hidden">
           <Gauge size={18} className="shrink-0 text-accent" />
+          <select
+            aria-label="Workspace"
+            value={workspace?.id ?? ""}
+            onChange={(e) => switchWorkspace(e.target.value)}
+            className="h-8 max-w-40 shrink-0 rounded-md border border-line bg-bg px-1 text-sm"
+          >
+            {me.workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
           {NAV.filter((n) => !("section" in n)).map((item) =>
             "href" in item ? (
               <Link key={item.href} href={item.href} className="shrink-0 rounded px-2 py-1 text-sm hover:bg-bg">

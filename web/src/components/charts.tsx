@@ -8,8 +8,27 @@ import type { BudgetUtilization, TrendPoint } from "@/lib/types";
 
 // Single series, so no legend: the card title names it. One hue, recessive grid, a
 // crosshair tooltip carrying exact values.
-export function SpendTrend({ points }: { points: TrendPoint[] }) {
-  const data = points.map((p) => ({ day: p.bucket, cost: Number(p.costUsd), requests: p.requests }));
+const DAY_MS = 86_400_000;
+
+// ClickHouse buckets are UTC days; label them in UTC so "today" doesn't show as yesterday
+const dayLabel = (d: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(d).toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
+
+/** One point per UTC day from `from` to today, zero where nothing was spent. */
+export function fillDays(points: TrendPoint[], from: Date): { day: string; cost: number; requests: number }[] {
+  const byDay = new Map(points.map((p) => [p.bucket.slice(0, 10), p]));
+  const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const rows = [];
+  for (let t = start; t <= Date.now(); t += DAY_MS) {
+    const key = new Date(t).toISOString().slice(0, 10);
+    const p = byDay.get(key);
+    rows.push({ day: `${key}T00:00:00Z`, cost: p ? Number(p.costUsd) : 0, requests: p?.requests ?? 0 });
+  }
+  return rows;
+}
+
+export function SpendTrend({ points, from }: { points: TrendPoint[]; from: Date }) {
+  const data = fillDays(points, from);
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer>
@@ -23,18 +42,18 @@ export function SpendTrend({ points }: { points: TrendPoint[] }) {
           <CartesianGrid vertical={false} stroke="var(--color-line)" />
           <XAxis
             dataKey="day"
-            tickFormatter={(d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            tickFormatter={(d: string) => dayLabel(d, { month: "short", day: "numeric" })}
             tick={{ fill: "var(--color-muted)", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             minTickGap={24}
           />
           <YAxis
-            tickFormatter={(v: number) => usd(v, v < 1 ? 2 : 0)}
+            tickFormatter={(v: number) => usd(v)}
             tick={{ fill: "var(--color-muted)", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            width={56}
+            width={64}
           />
           <Tooltip
             cursor={{ stroke: "var(--color-muted)", strokeDasharray: "3 3" }}
@@ -43,14 +62,22 @@ export function SpendTrend({ points }: { points: TrendPoint[] }) {
               const row = payload[0].payload as { day: string; cost: number; requests: number };
               return (
                 <div className="rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-sm">
-                  <p className="font-medium">{new Date(row.day).toLocaleDateString("en-US", { dateStyle: "medium" })}</p>
+                  <p className="font-medium">{dayLabel(row.day, { dateStyle: "medium" })}</p>
                   <p className="mt-1 tabular-nums">{usd(row.cost)} spent</p>
                   <p className="tabular-nums text-muted">{row.requests.toLocaleString()} requests</p>
                 </div>
               );
             }}
           />
-          <Area type="monotone" dataKey="cost" stroke="var(--color-chart)" strokeWidth={2} fill="url(#spendFill)" activeDot={{ r: 4 }} />
+          <Area
+            type="monotone"
+            dataKey="cost"
+            stroke="var(--color-chart)"
+            strokeWidth={2}
+            fill="url(#spendFill)"
+            activeDot={{ r: 4 }}
+            isAnimationActive={false}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -72,7 +99,7 @@ export function BarList({ rows }: { rows: { key: string; value: number; detail: 
           <div className="h-1.5 rounded-full bg-bg">
             <div
               className="h-1.5 rounded-full bg-chart transition-opacity group-hover:opacity-80"
-              style={{ width: `${max > 0 ? Math.max((r.value / max) * 100, 1.5) : 0}%` }}
+              style={{ width: `${max > 0 && r.value > 0 ? Math.max((r.value / max) * 100, 1.5) : 0}%` }}
             />
           </div>
         </li>
