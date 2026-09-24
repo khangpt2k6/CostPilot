@@ -44,7 +44,11 @@ public class PromptCacheEvictionSweeper {
 				.register(registry);
 	}
 
-	@Scheduled(fixedDelayString = "${costpilot.cache.eviction-interval-ms:60000}")
+	// first run after one interval, not at startup: a sweep racing context start once deleted
+	// rows a test had just backdated (#128). Lookups already skip stale rows, so nothing stale
+	// is served in the meantime; this only delays reclaiming storage.
+	@Scheduled(fixedDelayString = "${costpilot.cache.eviction-interval-ms:60000}",
+			initialDelayString = "${costpilot.cache.eviction-interval-ms:60000}")
 	public void sweep() {
 		int evicted = repository.deleteExpired(cache.staleBefore());
 		if (evicted > 0) {
