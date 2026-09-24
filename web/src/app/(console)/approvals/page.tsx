@@ -36,7 +36,7 @@ export default function ApprovalsPage() {
               <tr key={a.id}>
                 <Td className="whitespace-nowrap text-muted">{ago(a.createdAt)}</Td>
                 <Td className="mono">{a.team}</Td>
-                <Td className="mono">{a.requestedModel}</Td>
+                <Td className="mono whitespace-nowrap">{a.requestedModel}</Td>
                 <Td className="tabular-nums">{a.estimateNanos == null ? "" : usd(a.estimateNanos / 1e9)}</Td>
                 <Td className="max-w-xs text-xs text-muted">{a.reason}</Td>
                 <Td className="whitespace-nowrap text-muted">{when(a.expiresAt)}</Td>

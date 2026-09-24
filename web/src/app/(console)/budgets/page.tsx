@@ -56,7 +56,7 @@ export default function BudgetsPage() {
                 <tr key={`${b.scope}:${b.ref}`}>
                   <Td>{b.scope}</Td>
                   <Td className="mono">{b.ref}</Td>
-                  <Td className="tabular-nums">{usd(b.limit, 2)}</Td>
+                  <Td className="tabular-nums">{usd(b.limit)}</Td>
                   <Td className="tabular-nums">{b.remaining == null ? "" : usd(b.remaining)}</Td>
                   <Td className="tabular-nums">{used == null ? "" : `${(used * 100).toFixed(0)}%`}</Td>
                   <Td>
