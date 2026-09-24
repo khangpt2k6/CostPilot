@@ -150,6 +150,51 @@ jobs:
           shellcheck --severity=warning --exclude=SC2086 loadtest/*.sh
           echo "OK: shellcheck clean"
 
+  # 4.3: the console. No Java involved, so it runs beside the Gradle build.
+  web:
+    needs: guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  # 4.4: the TypeScript SDK. Mocked fetch, so no gateway or Docker needed.
+  sdk-ts:
+    needs: guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: sdk/typescript
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
   build:
     needs: guardrails
     runs-on: ubuntu-latest
