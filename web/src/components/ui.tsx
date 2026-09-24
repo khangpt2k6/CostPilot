@@ -32,7 +32,8 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
     <input
       {...props}
       className={clsx(
-        "h-9 w-full rounded-md border border-line bg-panel px-3 text-sm placeholder:text-muted",
+        "h-9 rounded-md border border-line bg-panel px-3 text-sm placeholder:text-muted",
+        fullUnlessSized(className),
         "focus:outline-2 focus:outline-offset-0 focus:outline-accent",
         className,
       )}
@@ -45,13 +46,19 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
     <select
       {...props}
       className={clsx(
-        "h-9 w-full rounded-md border border-line bg-panel px-2 text-sm focus:outline-2 focus:outline-accent",
+        "h-9 rounded-md border border-line bg-panel px-2 text-sm focus:outline-2 focus:outline-accent",
+        fullUnlessSized(className),
         className,
       )}
     >
       {children}
     </select>
   );
+}
+
+// full width by default; a caller-supplied w-* wins (class order doesn't decide CSS precedence)
+function fullUnlessSized(className?: string) {
+  return /(^|\s)(max-)?w-/.test(className ?? "") ? undefined : "w-full";
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
