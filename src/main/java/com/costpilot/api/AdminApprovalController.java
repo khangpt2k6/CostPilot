@@ -75,8 +75,8 @@ public class AdminApprovalController {
 			return ResponseEntity.notFound().build();
 		}
 		try {
-			ApprovalDecisionService.Outcome outcome = decisions.approve(pending, actor.tenantId());
-			adminAudit.record(actor.tenantId(), "approval.approve", "approval", id.toString(), "pending", "approved");
+			ApprovalDecisionService.Outcome outcome = decisions.approve(pending, actor.actor());
+			adminAudit.record(actor.tenantId(), actor.actor(), "approval.approve", "approval", id.toString(), "pending", "approved");
 			return ResponseEntity.ok(outcome.response());
 		} catch (ApprovalDecisionService.NotPendingException alreadyDecided) {
 			return ResponseEntity.status(409).body(errorBody(alreadyDecided.getMessage()));
@@ -92,8 +92,8 @@ public class AdminApprovalController {
 		}
 		String reason = body != null ? body.reason() : null;
 		try {
-			PendingApproval rejected = decisions.reject(pending, actor.tenantId(), reason);
-			adminAudit.record(actor.tenantId(), "approval.reject", "approval", id.toString(), "pending", "rejected");
+			PendingApproval rejected = decisions.reject(pending, actor.actor(), reason);
+			adminAudit.record(actor.tenantId(), actor.actor(), "approval.reject", "approval", id.toString(), "pending", "rejected");
 			return ResponseEntity.ok(PendingView.of(rejected));
 		} catch (ApprovalDecisionService.NotPendingException alreadyDecided) {
 			return ResponseEntity.status(409).body(errorBody(alreadyDecided.getMessage()));

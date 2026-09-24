@@ -72,7 +72,7 @@ public class AdminBudgetController {
 				.map(b -> b.getLimitAmount().toPlainString() + (b.isActive() ? "" : " (inactive)"))
 				.orElse(null);
 		BigDecimal remaining = budgetService.upsertLimit(actor.tenantId(), scope, request.ref(), request.limit());
-		adminAudit.record(actor.tenantId(), "budget.upsert", scope.dbValue(), request.ref(),
+		adminAudit.record(actor.tenantId(), actor.actor(), "budget.upsert", scope.dbValue(), request.ref(),
 				old, request.limit().toPlainString());
 		return new BudgetView(scope.dbValue(), request.ref(), request.limit(), remaining, true);
 	}
@@ -85,6 +85,6 @@ public class AdminBudgetController {
 				.map(b -> b.getLimitAmount().toPlainString())
 				.orElse(null);
 		budgetService.deactivate(actor.tenantId(), parsed, ref);
-		adminAudit.record(actor.tenantId(), "budget.deactivate", parsed.dbValue(), ref, old, null);
+		adminAudit.record(actor.tenantId(), actor.actor(), "budget.deactivate", parsed.dbValue(), ref, old, null);
 	}
 }

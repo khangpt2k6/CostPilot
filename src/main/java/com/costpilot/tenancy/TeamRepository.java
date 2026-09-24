@@ -1,5 +1,6 @@
 package com.costpilot.tenancy;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,4 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 // 6.1: resolve the api_key's team_id (UUID) to the team name used as the string identity
 // throughout the ledger/budget/policy path.
 public interface TeamRepository extends JpaRepository<Team, UUID> {
+
+	// 4.2: the console lists a workspace's teams
+	List<Team> findByTenantIdOrderByNameAsc(UUID tenantId);
 }

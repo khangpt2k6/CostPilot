@@ -35,8 +35,7 @@ public class AnalyticsController {
 	// null when the caller is a tenant-admin (no team confinement); otherwise the caller's
 	// own team, forced into every query.
 	private static String teamScope() {
-		AuthenticatedPrincipal principal = CurrentPrincipal.require();
-		return principal.admin() ? null : principal.teamId();
+		return CurrentPrincipal.require().teamScope();
 	}
 
 	private static String tenant() {

@@ -73,7 +73,7 @@ public class AdminPolicyController {
 		PolicyRule saved = policyService.upsertRule(actor.tenantId(), request.scopeType(), request.scopeRef(),
 				request.allowedModels(), request.fallbackAction(), request.downgradeTo(),
 				request.approvalThresholdNanos());
-		adminAudit.record(actor.tenantId(), "policy.upsert", request.scopeType(), request.scopeRef(),
+		adminAudit.record(actor.tenantId(), actor.actor(), "policy.upsert", request.scopeType(), request.scopeRef(),
 				old, request.allowedModels() + "/" + request.fallbackAction());
 		return PolicyView.of(saved);
 	}
@@ -85,6 +85,6 @@ public class AdminPolicyController {
 				.map(r -> r.getAllowedModels() + "/" + r.getFallbackAction())
 				.orElse(null);
 		policyService.deactivateRule(actor.tenantId(), scopeType, scopeRef);
-		adminAudit.record(actor.tenantId(), "policy.deactivate", scopeType, scopeRef, old, null);
+		adminAudit.record(actor.tenantId(), actor.actor(), "policy.deactivate", scopeType, scopeRef, old, null);
 	}
 }

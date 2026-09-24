@@ -49,7 +49,7 @@ public class AdminAuditController {
 		AuthenticatedPrincipal principal = CurrentPrincipal.require();
 		// isolation: a non-admin caller can only ever see its own team, regardless of the
 		// teamId it asks for
-		String effectiveTeam = principal.admin() ? blankToNull(teamId) : principal.teamId();
+		String effectiveTeam = principal.teamScope() == null ? blankToNull(teamId) : principal.teamScope();
 
 		Pageable pageable = PageRequest.of(Math.max(0, page), clampSize(size),
 				Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -67,7 +67,7 @@ public class AdminAuditController {
 		AuthenticatedPrincipal principal = CurrentPrincipal.require();
 		return repository.findById(id)
 				.filter(row -> principal.tenantId().equals(row.getTenantId()))
-				.filter(row -> principal.admin() || principal.teamId().equals(row.getTeamId()))
+				.filter(row -> principal.teamScope() == null || principal.teamScope().equals(row.getTeamId()))
 				.map(AuditRecordDto::from)
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> ResponseEntity.notFound().build());

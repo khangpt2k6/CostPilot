@@ -1,5 +1,6 @@
 package com.costpilot.tenancy;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 // 6.1: resolve the team's tenant_id (UUID) to the tenant name - populates the previously
 // null LedgerContext.tenantId once a request is authenticated.
 public interface TenantRepository extends JpaRepository<Tenant, UUID> {
+
+	Optional<Tenant> findByName(String name);
 }
