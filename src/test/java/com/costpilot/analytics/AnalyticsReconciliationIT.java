@@ -1,5 +1,7 @@
 package com.costpilot.analytics;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
@@ -100,15 +102,19 @@ class AnalyticsReconciliationIT {
 
 	// insert a ledger row (Postgres) and a matching ClickHouse event with the same cost
 	private void seedMatching(String team, long costNanos, int in, int out) {
+		seedMatching(AuthTestSupport.TENANT, team, costNanos, in, out);
+	}
+
+	private void seedMatching(String tenant, String team, long costNanos, int in, int out) {
 		BigDecimal cost = BigDecimal.valueOf(costNanos).movePointLeft(9);
-		ledger.record(new LedgerContext(null, team, "proj", "user", "prod", "recon-" + UUID.randomUUID()),
+		ledger.record(new LedgerContext(tenant, team, "proj", "user", "prod", "recon-" + UUID.randomUUID()),
 				"openai", "gpt-4o-mini", new Usage(in, out),
 				new Cost(cost, BigDecimal.ZERO), null);
 		clickhouseJdbc.update(
-				"insert into costpilot.usage_events (event_id, team_id, project_id, executed_model, decision, "
-						+ "finish_reason, input_tokens, output_tokens, cost_nanos, event_ts) "
-						+ "values (?,?,?,?,?,?,?,?,?,fromUnixTimestamp64Milli(?))",
-				UUID.randomUUID().toString(), team, "proj", "gpt-4o-mini", "allow", "stop",
+				"insert into costpilot.usage_events (event_id, tenant_id, team_id, project_id, executed_model, "
+						+ "decision, finish_reason, input_tokens, output_tokens, cost_nanos, event_ts) "
+						+ "values (?,?,?,?,?,?,?,?,?,?,fromUnixTimestamp64Milli(?))",
+				UUID.randomUUID().toString(), tenant, team, "proj", "gpt-4o-mini", "allow", "stop",
 				in, out, costNanos, Instant.now().toEpochMilli());
 	}
 
@@ -160,8 +166,8 @@ class AnalyticsReconciliationIT {
 	void savingsSummaryIncludesCacheHitLogWithoutDoubleCounting() {
 		String team = "sav-cache-" + UUID.randomUUID();
 		seedWithSavings(team, 5_000_000L, 1_000_000L); // routing 1m
-		cacheHitLog.record(null, team, 2_000_000L); // cache 2m
-		cacheHitLog.record(null, team, 1_000_000L); // cache +1m = 3m cache
+		cacheHitLog.record(AuthTestSupport.TENANT, team, 2_000_000L); // cache 2m
+		cacheHitLog.record(AuthTestSupport.TENANT, team, 1_000_000L); // cache +1m = 3m cache
 
 		SavingsSummary s = restTemplate.exchange(
 				"/api/analytics/savings?from={f}&to={t}",
@@ -180,7 +186,7 @@ class AnalyticsReconciliationIT {
 
 	private void seedWithSavings(String team, long costNanos, long savingsNanos) {
 		BigDecimal cost = BigDecimal.valueOf(costNanos).movePointLeft(9);
-		ledger.record(new LedgerContext(null, team, "proj", "user", "prod", "sav-" + UUID.randomUUID()),
+		ledger.record(new LedgerContext(AuthTestSupport.TENANT, team, "proj", "user", "prod", "sav-" + UUID.randomUUID()),
 				"openai", "gpt-4o-mini", new Usage(10, 5), new Cost(cost, BigDecimal.ZERO), null, savingsNanos);
 	}
 
@@ -200,5 +206,32 @@ class AnalyticsReconciliationIT {
 				.filter(b -> team.equals(b.key())).findFirst().orElseThrow();
 		assertThat(bucket.costUsd()).isEqualTo("0.010000000");
 		assertThat(bucket.requests()).isEqualTo(2);
+	}
+
+	// 4.1: a same-named team in another tenant never leaks into this tenant's analytics,
+	// and reconciliation stays exact because both sides are tenant-scoped
+	@Test
+	void anotherTenantsEventsNeverReachTheCallersAnalytics() {
+		String team = "iso-" + UUID.randomUUID();
+		seedMatching(team, 4_000_000L, 10, 5);
+		seedMatching("other-tenant", team, 9_000_000L, 10, 5);
+
+		SpendBucket[] buckets = restTemplate.exchange(
+				"/api/analytics/spend?groupBy=team&from={f}&to={t}",
+				org.springframework.http.HttpMethod.GET,
+				new org.springframework.http.HttpEntity<>(com.costpilot.security.AuthTestSupport.admin()),
+				SpendBucket[].class, t0.toString(), t1.toString()).getBody();
+		SpendBucket bucket = java.util.Arrays.stream(buckets)
+				.filter(b -> team.equals(b.key())).findFirst().orElseThrow();
+		assertThat(bucket.costUsd()).isEqualTo("0.004000000");
+		assertThat(bucket.requests()).isEqualTo(1);
+
+		ReconciliationResult result = restTemplate.exchange(
+				"/api/analytics/reconcile?from={f}&to={t}",
+				org.springframework.http.HttpMethod.GET,
+				new org.springframework.http.HttpEntity<>(com.costpilot.security.AuthTestSupport.admin()),
+				ReconciliationResult.class, t0.toString(), t1.toString()).getBody();
+		assertThat(result.reconciled()).isTrue();
+		assertThat(result.clickhouseNanos()).isEqualTo(4_000_000L);
 	}
 }

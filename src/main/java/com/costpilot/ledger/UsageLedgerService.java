@@ -59,10 +59,11 @@ public class UsageLedgerService {
 			UsageRecord saved = insert(context, provider, model, usage, cost, priceId, savingsNanos);
 			// live budget counters move only on a FRESH insert - ledger idempotency
 			// is exactly what makes the counters replay-safe (3.1)
-			budgetService.charge(BudgetScope.TENANT, saved.getTenantId(), cost.total());
-			budgetService.charge(BudgetScope.TEAM, saved.getTeamId(), cost.total());
-			budgetService.charge(BudgetScope.PROJECT, saved.getProjectId(), cost.total());
-			budgetService.charge(BudgetScope.MODEL, saved.getModel(), cost.total());
+			String tenant = saved.getTenantId();
+			budgetService.charge(tenant, BudgetScope.TENANT, tenant, cost.total());
+			budgetService.charge(tenant, BudgetScope.TEAM, saved.getTeamId(), cost.total());
+			budgetService.charge(tenant, BudgetScope.PROJECT, saved.getProjectId(), cost.total());
+			budgetService.charge(tenant, BudgetScope.MODEL, saved.getModel(), cost.total());
 			return new LedgerResult(saved, true);
 		} catch (DataIntegrityViolationException e) {
 			// concurrent replay lost the insert race - the money is already counted

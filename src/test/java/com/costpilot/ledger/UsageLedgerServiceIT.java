@@ -1,5 +1,7 @@
 package com.costpilot.ledger;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
@@ -38,7 +40,7 @@ class UsageLedgerServiceIT {
 	}
 
 	private LedgerContext context(String key) {
-		return new LedgerContext(null, "team-a", "project-x", "user-1", "dev", key);
+		return new LedgerContext(AuthTestSupport.TENANT, "team-a", "project-x", "user-1", "dev", key);
 	}
 
 	private Cost cost(String in, String out) {

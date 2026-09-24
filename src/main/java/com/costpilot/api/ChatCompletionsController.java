@@ -211,7 +211,8 @@ public class ChatCompletionsController {
 	private Long cutoffAllowance(BudgetGuard.GuardResult guard) {
 		Long allowance = null;
 		for (BudgetGuard.Reservation reservation : guard.reservations()) {
-			Long remaining = budgetService.remainingNanos(reservation.scope(), reservation.ref());
+			Long remaining = budgetService.remainingNanos(reservation.tenant(), reservation.scope(),
+					reservation.ref());
 			if (remaining != null) {
 				long candidate = remaining + reservation.nanos();
 				allowance = allowance == null ? candidate : Math.min(allowance, candidate);

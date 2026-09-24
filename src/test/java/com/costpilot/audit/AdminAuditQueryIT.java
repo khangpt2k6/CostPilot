@@ -49,7 +49,7 @@ class AdminAuditQueryIT {
 
 	private AuditRecord row(String team, String project, String decision) {
 		return AuditRecord.builder()
-				.teamId(team).projectId(project)
+				.tenantId(AuthTestSupport.TENANT).teamId(team).projectId(project)
 				.requestedModel("gpt-4o").executedModel("gpt-4o")
 				.decision(decision)
 				.build();

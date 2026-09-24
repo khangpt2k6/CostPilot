@@ -1,5 +1,7 @@
 package com.costpilot.pricing;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
@@ -58,7 +60,7 @@ class PriceVersioningIT {
 		CostService.Priced pricedV1 = costService.pricedCostFor(provider, model, new Usage(1000, 1000), requestTime);
 		assertThat(pricedV1.cost().total()).isEqualByComparingTo("0.003");
 		UsageRecord recorded = ledger.record(
-				new LedgerContext(null, "team-a", null, null, null, "versioning-" + UUID.randomUUID()),
+				new LedgerContext(AuthTestSupport.TENANT, "team-a", null, null, null, "versioning-" + UUID.randomUUID()),
 				provider, model, new Usage(1000, 1000), pricedV1.cost(), pricedV1.price().getId()).record();
 
 		Thread.sleep(50); // ensure the version boundary is strictly after requestTime

@@ -75,7 +75,7 @@ class MetricsIT {
 		// tiny cap + large max_tokens: the estimate exceeds the cap and no cheaper
 		// allowed model fits, so the request is rejected with 402
 		String team = "metrics-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("0.0000001")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("0.0000001")));
 		ResponseEntity<String> response = post(team, 4096);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYMENT_REQUIRED);
 

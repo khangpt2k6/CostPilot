@@ -12,6 +12,9 @@ public final class AuthTestSupport {
 	public static final String TEAM_PLATFORM_KEY = "cp_demo_team_platform";
 	public static final String TEAM_RESEARCH_KEY = "cp_demo_team_research";
 
+	// 4.1: the seed tenant all three demo keys resolve under (V2)
+	public static final String TENANT = "acme";
+
 	private AuthTestSupport() {
 	}
 

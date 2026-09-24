@@ -46,8 +46,9 @@ public class PolicyService {
 			Long approvalThresholdNanos) {
 	}
 
-	public static String cacheKey(String scopeType, String scopeRef) {
-		return "policy:rule:" + scopeType + ":" + scopeRef;
+	// 4.1: tenant-qualified, same {hash tag} layout as the budget counters
+	public static String cacheKey(String tenant, String scopeType, String scopeRef) {
+		return "policy:rule:{" + tenant + "}:" + scopeType + ":" + scopeRef;
 	}
 
 	public PolicyDecision evaluate(LedgerContext context, String model) {
@@ -66,12 +67,16 @@ public class PolicyService {
 		// project override wins over the team rule
 		CachedRule rule = null;
 		String matchedScope = null;
+		String tenant = context.tenantId();
+		if (tenant == null || tenant.isBlank()) {
+			return decide(null, null, model);
+		}
 		if (context.projectId() != null && !context.projectId().isBlank()) {
-			rule = load("project", context.projectId());
+			rule = load(tenant, "project", context.projectId());
 			matchedScope = "project=" + context.projectId();
 		}
 		if (rule == null && context.teamId() != null && !context.teamId().isBlank()) {
-			rule = load("team", context.teamId());
+			rule = load(tenant, "team", context.teamId());
 			matchedScope = "team=" + context.teamId();
 		}
 		return decide(rule, matchedScope, model);
@@ -110,8 +115,8 @@ public class PolicyService {
 	}
 
 	/** Hot path: Redis cache first (60s TTL + explicit invalidation), DB on miss. */
-	private CachedRule load(String scopeType, String scopeRef) {
-		String key = cacheKey(scopeType, scopeRef);
+	private CachedRule load(String tenant, String scopeType, String scopeRef) {
+		String key = cacheKey(tenant, scopeType, scopeRef);
 		try {
 			String cached = redis.opsForValue().get(key);
 			if (NONE.equals(cached)) {
@@ -122,11 +127,11 @@ public class PolicyService {
 			}
 		} catch (DataAccessException e) {
 			log.warn("policy cache read failed, evaluating from DB: {}", e.getMessage());
-			return fromDb(scopeType, scopeRef).orElse(null);
+			return fromDb(tenant, scopeType, scopeRef).orElse(null);
 		} catch (Exception e) {
 			log.warn("policy cache entry unreadable, refreshing: {}", e.getMessage());
 		}
-		Optional<CachedRule> rule = fromDb(scopeType, scopeRef);
+		Optional<CachedRule> rule = fromDb(tenant, scopeType, scopeRef);
 		try {
 			redis.opsForValue().set(key, rule.map(this::toJson).orElse(NONE), CACHE_TTL);
 		} catch (DataAccessException e) {
@@ -135,51 +140,51 @@ public class PolicyService {
 		return rule.orElse(null);
 	}
 
-	private Optional<CachedRule> fromDb(String scopeType, String scopeRef) {
-		return rules.findByScopeTypeAndScopeRefAndActiveTrue(scopeType, scopeRef)
+	private Optional<CachedRule> fromDb(String tenant, String scopeType, String scopeRef) {
+		return rules.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scopeType, scopeRef)
 				.map(r -> new CachedRule(r.getId().toString(), r.getAllowedModels(),
 						r.getFallbackAction(), r.getDowngradeTo(), r.getApprovalThresholdNanos()));
 	}
 
 	/** Create or update a rule; the cache is invalidated so it applies immediately. */
 	@Transactional
-	public PolicyRule upsertRule(String scopeType, String scopeRef, String allowedModels,
+	public PolicyRule upsertRule(String tenant, String scopeType, String scopeRef, String allowedModels,
 			String fallbackAction, String downgradeTo) {
-		return upsertRule(scopeType, scopeRef, allowedModels, fallbackAction, downgradeTo, null);
+		return upsertRule(tenant, scopeType, scopeRef, allowedModels, fallbackAction, downgradeTo, null);
 	}
 
 	/** As above, with the 8.1 approval cost threshold (nanodollars; null = no cost gate). */
 	@Transactional
-	public PolicyRule upsertRule(String scopeType, String scopeRef, String allowedModels,
+	public PolicyRule upsertRule(String tenant, String scopeType, String scopeRef, String allowedModels,
 			String fallbackAction, String downgradeTo, Long approvalThresholdNanos) {
-		PolicyRule rule = rules.findByScopeTypeAndScopeRefAndActiveTrue(scopeType, scopeRef)
+		PolicyRule rule = rules.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scopeType, scopeRef)
 				.map(existing -> {
 					existing.update(allowedModels, fallbackAction, downgradeTo, approvalThresholdNanos);
 					return existing;
 				})
-				.orElseGet(() -> rules.save(new PolicyRule(scopeType, scopeRef, allowedModels, fallbackAction,
-						downgradeTo, approvalThresholdNanos)));
+				.orElseGet(() -> rules.save(new PolicyRule(tenant, scopeType, scopeRef, allowedModels,
+						fallbackAction, downgradeTo, approvalThresholdNanos)));
 		rules.flush();
-		evict(scopeType, scopeRef);
-		log.info("policy rule upserted scope={}:{} allowed=\"{}\" fallback={} threshold={} rule={}",
-				scopeType, scopeRef, allowedModels, fallbackAction, approvalThresholdNanos, rule.getId());
+		evict(tenant, scopeType, scopeRef);
+		log.info("policy rule upserted tenant={} scope={}:{} allowed=\"{}\" fallback={} threshold={} rule={}",
+				tenant, scopeType, scopeRef, allowedModels, fallbackAction, approvalThresholdNanos, rule.getId());
 		return rule;
 	}
 
 	/** 9.1 admin CRUD: deactivate a rule so the scope reverts to default-open; invalidated. */
 	@Transactional
-	public void deactivateRule(String scopeType, String scopeRef) {
-		rules.findByScopeTypeAndScopeRefAndActiveTrue(scopeType, scopeRef).ifPresent(rule -> {
+	public void deactivateRule(String tenant, String scopeType, String scopeRef) {
+		rules.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scopeType, scopeRef).ifPresent(rule -> {
 			rule.deactivate();
 			rules.flush();
 		});
-		evict(scopeType, scopeRef);
-		log.info("policy rule deactivated scope={}:{}", scopeType, scopeRef);
+		evict(tenant, scopeType, scopeRef);
+		log.info("policy rule deactivated tenant={} scope={}:{}", tenant, scopeType, scopeRef);
 	}
 
-	public void evict(String scopeType, String scopeRef) {
+	public void evict(String tenant, String scopeType, String scopeRef) {
 		try {
-			redis.delete(cacheKey(scopeType, scopeRef));
+			redis.delete(cacheKey(tenant, scopeType, scopeRef));
 		} catch (DataAccessException e) {
 			log.warn("policy cache evict failed (entry expires in {}s anyway): {}",
 					CACHE_TTL.toSeconds(), e.getMessage());

@@ -126,7 +126,7 @@ class RoutingPolicyIT {
 		String team = "route-policy-" + UUID.randomUUID();
 		String key = "route-policy-" + UUID.randomUUID();
 		// policy: this team may only use gemini models; fallback deny
-		policyService.upsertRule("team", team, "gemini-*", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gemini-*", "deny", null);
 
 		// bar tier>=1 -> cheapest qualifying among policy-allowed is gemini-2.5-flash,
 		// NOT the globally-cheapest gpt-4o-mini

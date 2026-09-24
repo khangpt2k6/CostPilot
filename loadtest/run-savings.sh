@@ -35,9 +35,9 @@ delete from usage_record where team_id like 'lt-savings-%';
 delete from cache_hit_log where team_id like 'lt-savings-%';
 delete from prompt_cache where team_id like 'lt-savings-%';
 delete from budget where scope_ref like 'lt-savings-%';
-insert into budget (scope_type, scope_ref, limit_amount)
-select 'team', 'lt-savings-route-' || n, 1000 from generate_series(0, 4) n union all
-select 'team', 'lt-savings-cache-' || n, 1000 from generate_series(0, 4) n;
+insert into budget (tenant_id, scope_type, scope_ref, limit_amount)
+select 'acme', 'team', 'lt-savings-route-' || n, 1000 from generate_series(0, 4) n union all
+select 'acme', 'team', 'lt-savings-cache-' || n, 1000 from generate_series(0, 4) n;
 SQL
 docker compose exec -T redis redis-cli flushdb > /dev/null
 

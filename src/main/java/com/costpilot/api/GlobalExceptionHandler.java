@@ -53,6 +53,13 @@ public class GlobalExceptionHandler {
 						ex.getMessage(), "policy_denied", String.valueOf(ex.getDecision().matchedRuleId()))));
 	}
 
+	// 4.1: admin inputs that fail domain validation (unknown scope, a tenant budget aimed
+	// at another tenant) are the caller's mistake, not a server error
+	@ExceptionHandler(IllegalArgumentException.class)
+	ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+		return badRequest(ex.getMessage());
+	}
+
 	private ResponseEntity<ErrorResponse> badRequest(String message) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.invalidRequest(message));
 	}

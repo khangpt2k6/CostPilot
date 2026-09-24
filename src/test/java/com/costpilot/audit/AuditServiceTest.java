@@ -1,5 +1,7 @@
 package com.costpilot.audit;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -34,7 +36,7 @@ class AuditServiceTest {
 	private ArgumentCaptor<AuditRecord> captor;
 
 	private static LedgerContext ledger() {
-		return new LedgerContext(null, "team-a", "proj-a", "user-a", "prod", "idem-1");
+		return new LedgerContext(AuthTestSupport.TENANT, "team-a", "proj-a", "user-a", "prod", "idem-1");
 	}
 
 	@Test

@@ -71,7 +71,7 @@ class SemanticCacheIT {
 		// 1.3: hit writes cache_hit_log (positive would-be cost), not usage_record.savings_nanos
 		java.time.Instant from = java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS);
 		java.time.Instant to = java.time.Instant.now().plus(1, java.time.temporal.ChronoUnit.HOURS);
-		assertThat(cacheHitLog.totalSavingsNanosForTeamBetween(team, from, to)).isPositive();
+		assertThat(cacheHitLog.totalSavingsNanosForTeamBetween(AuthTestSupport.TENANT, team, from, to)).isPositive();
 	}
 
 	@Test

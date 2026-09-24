@@ -63,7 +63,7 @@ class ChatCompletionsContractTest {
 	// an admin principal so the tests' X-Team-ID='team-a' impersonation resolves as before
 	private static Authentication adminPrincipal() {
 		AuthenticatedPrincipal principal = new AuthenticatedPrincipal(
-				"acme", "platform", "chatbot", java.util.UUID.randomUUID(), true);
+				"acme", "platform", "chatbot", java.util.UUID.randomUUID(), true, java.util.UUID.randomUUID());
 		return new UsernamePasswordAuthenticationToken(principal, null,
 				java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
 	}

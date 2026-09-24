@@ -18,6 +18,10 @@ public class PolicyRule {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
+	// 4.1: owning tenant (by name). Rules never cross tenants.
+	@Column(name = "tenant_id", nullable = false, columnDefinition = "text")
+	private String tenantId;
+
 	@Column(name = "scope_type", nullable = false, columnDefinition = "text")
 	private String scopeType;
 
@@ -50,13 +54,14 @@ public class PolicyRule {
 	protected PolicyRule() {
 	}
 
-	public PolicyRule(String scopeType, String scopeRef, String allowedModels,
+	public PolicyRule(String tenantId, String scopeType, String scopeRef, String allowedModels,
 			String fallbackAction, String downgradeTo) {
-		this(scopeType, scopeRef, allowedModels, fallbackAction, downgradeTo, null);
+		this(tenantId, scopeType, scopeRef, allowedModels, fallbackAction, downgradeTo, null);
 	}
 
-	public PolicyRule(String scopeType, String scopeRef, String allowedModels,
+	public PolicyRule(String tenantId, String scopeType, String scopeRef, String allowedModels,
 			String fallbackAction, String downgradeTo, Long approvalThresholdNanos) {
+		this.tenantId = tenantId;
 		this.scopeType = scopeType;
 		this.scopeRef = scopeRef;
 		this.allowedModels = allowedModels;
@@ -86,6 +91,10 @@ public class PolicyRule {
 
 	public UUID getId() {
 		return id;
+	}
+
+	public String getTenantId() {
+		return tenantId;
 	}
 
 	public String getScopeType() {

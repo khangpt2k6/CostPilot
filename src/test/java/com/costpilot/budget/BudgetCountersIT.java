@@ -1,5 +1,7 @@
 package com.costpilot.budget;
 
+import com.costpilot.security.AuthTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
@@ -50,11 +52,11 @@ class BudgetCountersIT {
 	void freshScope() {
 		// unique scope per test - the shared context accumulates state otherwise
 		team = "team-" + UUID.randomUUID();
-		budgets.save(new Budget("team", team, new BigDecimal("10.000000000")));
+		budgets.save(new Budget(AuthTestSupport.TENANT, "team", team, new BigDecimal("10.000000000")));
 	}
 
 	private LedgerContext context(String key) {
-		return new LedgerContext(null, team, null, null, null, key);
+		return new LedgerContext(AuthTestSupport.TENANT, team, null, null, null, key);
 	}
 
 	private void chargeViaLedger(String key, String in, String out) {
@@ -67,8 +69,8 @@ class BudgetCountersIT {
 		chargeViaLedger("r1-" + team, "0.0003", "0.0006");
 		chargeViaLedger("r2-" + team, "0.001", "0.002");
 
-		BigDecimal remaining = budgetService.remaining(BudgetScope.TEAM, team);
-		BigDecimal ledgerSpent = budgetService.spentFromLedger(BudgetScope.TEAM, team);
+		BigDecimal remaining = budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team);
+		BigDecimal ledgerSpent = budgetService.spentFromLedger(AuthTestSupport.TENANT, BudgetScope.TEAM, team);
 
 		assertThat(ledgerSpent).isEqualByComparingTo("0.0039");
 		assertThat(remaining).isEqualByComparingTo(new BigDecimal("10").subtract(ledgerSpent));
@@ -78,7 +80,7 @@ class BudgetCountersIT {
 	void atomicUnderConcurrentChargesNoLostUpdates() throws Exception {
 		int writers = 24;
 		// prime the counter so every concurrent path takes the atomic DECRBY branch
-		budgetService.remaining(BudgetScope.TEAM, team);
+		budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team);
 
 		CountDownLatch start = new CountDownLatch(1);
 		try (ExecutorService pool = Executors.newFixedThreadPool(12)) {
@@ -96,8 +98,8 @@ class BudgetCountersIT {
 		}
 
 		// 24 x 0.0003 = 0.0072 - exact integer nanodollar math, no drift, no lost update
-		assertThat(budgetService.remaining(BudgetScope.TEAM, team)).isEqualByComparingTo("9.9928");
-		assertThat(budgetService.spentFromLedger(BudgetScope.TEAM, team)).isEqualByComparingTo("0.0072");
+		assertThat(budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team)).isEqualByComparingTo("9.9928");
+		assertThat(budgetService.spentFromLedger(AuthTestSupport.TENANT, BudgetScope.TEAM, team)).isEqualByComparingTo("0.0072");
 	}
 
 	@Test
@@ -106,25 +108,25 @@ class BudgetCountersIT {
 		chargeViaLedger("cold-2-" + team, "0.1", "0.05");
 
 		// cold start: Redis lost everything
-		redis.delete(BudgetService.counterKey(BudgetScope.TEAM, team));
+		redis.delete(BudgetService.counterKey(AuthTestSupport.TENANT, BudgetScope.TEAM, team));
 
-		BigDecimal rebuilt = budgetService.remaining(BudgetScope.TEAM, team);
+		BigDecimal rebuilt = budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team);
 		assertThat(rebuilt).isEqualByComparingTo("9.1"); // 10 - 0.9
 
 		// and the very next charge keeps counting from the rebuilt value
 		chargeViaLedger("cold-3-" + team, "0.05", "0.05");
-		assertThat(budgetService.remaining(BudgetScope.TEAM, team)).isEqualByComparingTo("9.0");
+		assertThat(budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team)).isEqualByComparingTo("9.0");
 	}
 
 	@Test
 	void replayedLedgerWritesDoNotMoveTheCounterTwice() {
-		budgetService.remaining(BudgetScope.TEAM, team); // prime
+		budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team); // prime
 		String key = "replay-" + team;
 		chargeViaLedger(key, "0.001", "0.001");
 		chargeViaLedger(key, "0.001", "0.001");
 		chargeViaLedger(key, "0.001", "0.001");
 
 		assertThat(usageRepository.findByIdempotencyKey(key)).isPresent();
-		assertThat(budgetService.remaining(BudgetScope.TEAM, team)).isEqualByComparingTo("9.998");
+		assertThat(budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team)).isEqualByComparingTo("9.998");
 	}
 }

@@ -64,7 +64,7 @@ class PolicyEngineIT {
 	@Test
 	void deniedModelGets403WithReasonAndMatchedRule(CapturedOutput output) {
 		String team = "policy-team-" + UUID.randomUUID();
-		var rule = policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null);
+		var rule = policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null);
 
 		ResponseEntity<String> denied = post(team, null, "claude-sonnet-4-5");
 		assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -83,8 +83,8 @@ class PolicyEngineIT {
 	void projectOverrideWinsOverTeamRule() {
 		String team = "policy-team-" + UUID.randomUUID();
 		String project = "policy-project-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null);
-		policyService.upsertRule("project", project, "claude-*", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "project", project, "claude-*", "deny", null);
 
 		// team alone would deny claude; the project override allows it
 		ResponseEntity<String> viaProject = post(team, project, "claude-sonnet-4-5");
@@ -99,7 +99,7 @@ class PolicyEngineIT {
 	@Test
 	void downgradeServesTheRequestOnTheCheaperModel() throws Exception {
 		String team = "policy-team-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "downgrade", "gpt-4o-mini");
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "downgrade", "gpt-4o-mini");
 
 		ResponseEntity<String> response = post(team, null, "gpt-4o");
 
@@ -118,7 +118,7 @@ class PolicyEngineIT {
 	@Test
 	void requireApprovalParksTheRequestWithAPendingHandle() {
 		String team = "policy-team-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "require_approval", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "require_approval", null);
 
 		// Stage 8: a REQUIRE_APPROVAL request is parked (202 + pending id), not rejected.
 		ResponseEntity<String> response = post(team, null, "gpt-4o");
@@ -134,7 +134,7 @@ class PolicyEngineIT {
 		String team = "policy-team-" + UUID.randomUUID();
 		// gpt-4o-mini IS allowed, but a 1-nanodollar approval threshold means any real
 		// request's pre-flight estimate exceeds it -> parked for approval (8.1).
-		policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null, 1L);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null, 1L);
 
 		ResponseEntity<String> response = post(team, null, "gpt-4o-mini");
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
@@ -149,7 +149,7 @@ class PolicyEngineIT {
 	void underThresholdAllowedModelPassesThrough() {
 		String team = "policy-team-" + UUID.randomUUID();
 		// a very high threshold -> a normal small request stays under it and is served
-		policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null, 1_000_000_000_000L);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null, 1_000_000_000_000L);
 
 		assertThat(post(team, null, "gpt-4o-mini").getStatusCode()).isEqualTo(HttpStatus.OK);
 	}
@@ -157,12 +157,12 @@ class PolicyEngineIT {
 	@Test
 	void policyChangeTakesEffectWithoutRedeploy() {
 		String team = "policy-team-" + UUID.randomUUID();
-		policyService.upsertRule("team", team, "gpt-4o-mini", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini", "deny", null);
 
 		assertThat(post(team, null, "gemini-2.5-flash").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
 		// widen the rule at runtime - same running app, next request passes
-		policyService.upsertRule("team", team, "gpt-4o-mini,gemini-*", "deny", null);
+		policyService.upsertRule(AuthTestSupport.TENANT, "team", team, "gpt-4o-mini,gemini-*", "deny", null);
 		assertThat(post(team, null, "gemini-2.5-flash").getStatusCode()).isEqualTo(HttpStatus.OK);
 	}
 

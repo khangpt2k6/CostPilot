@@ -84,6 +84,6 @@ public class ApiKeyAuthService {
 				.map(Project::getName)
 				.orElse(null);
 		return new AuthenticatedPrincipal(tenant.getName(), team.getName(), projectName,
-				team.getId(), key.isAdmin());
+				team.getId(), key.isAdmin(), tenant.getId());
 	}
 }

@@ -73,27 +73,28 @@ public class AnalyticsQueryService {
 	// deduped rows for [from,to): one row per event_id, latest ingest wins.
 	// The window bounds are bound as epoch millis via fromUnixTimestamp64Milli - matching
 	// exactly how event_ts was written on ingest (no driver/session-timezone ambiguity).
-	// 6.1: when teamScope != null the subquery also constrains team_id = ? so per-team
-	// isolation is applied INSIDE the aggregation, not as a post-filter - a non-admin can
-	// never aggregate over another team's rows.
+	// 4.1: the subquery always constrains tenant_id = ?, and 6.1: when teamScope != null
+	// also team_id = ?. Isolation is applied INSIDE the aggregation, not as a post-filter,
+	// so a caller can never aggregate over another tenant's (or team's) rows.
 	private String dedupSubquery(String extraCols, boolean teamScoped) {
 		return "select event_id, argMax(cost_nanos, ingested_at) as cost_nanos, "
 				+ "argMax(input_tokens, ingested_at) as input_tokens, "
 				+ "argMax(output_tokens, ingested_at) as output_tokens" + extraCols
 				+ " from " + table()
 				+ " where event_ts >= fromUnixTimestamp64Milli(?) "
-				+ "and event_ts < fromUnixTimestamp64Milli(?)"
+				+ "and event_ts < fromUnixTimestamp64Milli(?) and tenant_id = ?"
 				+ (teamScoped ? " and team_id = ?" : "") + " group by event_id";
 	}
 
-	// bind the window bounds, then the optional team filter, in the order the ? appear
-	private static Object[] windowArgs(Instant from, Instant to, String teamScope) {
+	// bind the window bounds, the tenant, then the optional team filter, in ? order
+	private static Object[] windowArgs(Instant from, Instant to, String tenant, String teamScope) {
 		return teamScope == null
-				? new Object[] { ts(from), ts(to) }
-				: new Object[] { ts(from), ts(to), teamScope };
+				? new Object[] { ts(from), ts(to), tenant }
+				: new Object[] { ts(from), ts(to), tenant, teamScope };
 	}
 
-	public List<SpendBucket> spendByDimension(String dimension, Instant from, Instant to, String teamScope) {
+	public List<SpendBucket> spendByDimension(String dimension, Instant from, Instant to, String tenant,
+			String teamScope) {
 		String col = Dimension.columnFor(dimension);
 		String sql = "select k as key, sum(cost_nanos) as cost_nanos, count() as requests, "
 				+ "sum(input_tokens) as in_tok, sum(output_tokens) as out_tok from ("
@@ -102,15 +103,16 @@ public class AnalyticsQueryService {
 		return clickhouse.query(sql, (rs, i) -> new SpendBucket(
 				rs.getString("key"), usd(rs.getLong("cost_nanos")),
 				rs.getLong("requests"), rs.getLong("in_tok"), rs.getLong("out_tok")),
-				windowArgs(from, to, teamScope));
+				windowArgs(from, to, tenant, teamScope));
 	}
 
-	public List<TopSpender> topSpenders(String dimension, int limit, Instant from, Instant to, String teamScope) {
+	public List<TopSpender> topSpenders(String dimension, int limit, Instant from, Instant to, String tenant,
+			String teamScope) {
 		String col = Dimension.columnFor(dimension);
 		String sql = "select k as key, sum(cost_nanos) as cost_nanos, count() as requests from ("
 				+ dedupSubquery(", argMax(" + col + ", ingested_at) as k", teamScope != null)
 				+ ") group by k order by cost_nanos desc limit ?";
-		Object[] base = windowArgs(from, to, teamScope);
+		Object[] base = windowArgs(from, to, tenant, teamScope);
 		Object[] args = java.util.Arrays.copyOf(base, base.length + 1);
 		args[base.length] = limit;
 		return clickhouse.query(sql, (rs, i) -> new TopSpender(
@@ -118,7 +120,7 @@ public class AnalyticsQueryService {
 				args);
 	}
 
-	public DecisionCounts decisionCounts(Instant from, Instant to, String teamScope) {
+	public DecisionCounts decisionCounts(Instant from, Instant to, String tenant, String teamScope) {
 		// decision comes from the event; a cutoff is an allow/downgrade whose stream was
 		// truncated, identified by finish_reason=budget_cutoff
 		String sql = "select "
@@ -133,10 +135,10 @@ public class AnalyticsQueryService {
 				+ ")";
 		return clickhouse.queryForObject(sql, (rs, i) -> new DecisionCounts(
 				rs.getLong("allow"), rs.getLong("downgrade"), rs.getLong("route"), rs.getLong("cutoff"),
-				rs.getLong("deny"), rs.getLong("approval")), windowArgs(from, to, teamScope));
+				rs.getLong("deny"), rs.getLong("approval")), windowArgs(from, to, tenant, teamScope));
 	}
 
-	public List<TrendPoint> trends(String interval, Instant from, Instant to, String teamScope) {
+	public List<TrendPoint> trends(String interval, Instant from, Instant to, String tenant, String teamScope) {
 		String unit = "hour".equalsIgnoreCase(interval) ? "1 hour" : "1 day";
 		String sql = "select toStartOfInterval(ev_ts, interval " + unit + ") as bucket, "
 				+ "sum(cost_nanos) as cost_nanos, count() as requests from ("
@@ -144,14 +146,15 @@ public class AnalyticsQueryService {
 				+ ") group by bucket order by bucket";
 		return clickhouse.query(sql, (rs, i) -> new TrendPoint(
 				rs.getTimestamp("bucket").toInstant(), usd(rs.getLong("cost_nanos")), rs.getLong("requests")),
-				windowArgs(from, to, teamScope));
+				windowArgs(from, to, tenant, teamScope));
 	}
 
 	// Budget limits from Postgres (money truth), spend from ClickHouse (reporting),
 	// joined in Java by scope ref. scopeType maps to the grouping dimension.
 	// 6.1: a non-admin (teamScope != null) may only see its own team's utilization - the
 	// scope is forced to team and the result confined to its own budget row.
-	public List<BudgetUtilization> budgetUtilization(String scopeType, Instant from, Instant to, String teamScope) {
+	public List<BudgetUtilization> budgetUtilization(String scopeType, Instant from, Instant to, String tenant,
+			String teamScope) {
 		String effectiveScope = teamScope != null ? "team" : scopeType;
 		String dimension = switch (effectiveScope.toLowerCase()) {
 			case "team" -> "team";
@@ -159,10 +162,10 @@ public class AnalyticsQueryService {
 			default -> throw new IllegalArgumentException("unsupported budget scope: " + scopeType);
 		};
 		Map<String, Long> spendByRef = new java.util.HashMap<>();
-		for (SpendBucket b : spendByDimension(dimension, from, to, teamScope)) {
+		for (SpendBucket b : spendByDimension(dimension, from, to, tenant, teamScope)) {
 			spendByRef.put(b.key(), new BigDecimal(b.costUsd()).movePointRight(9).longValueExact());
 		}
-		return budgetRepository.findAll().stream()
+		return budgetRepository.findByTenantId(tenant).stream()
 				.filter(Budget::isActive)
 				.filter(b -> b.getScopeType().equalsIgnoreCase(effectiveScope))
 				.filter(b -> teamScope == null || teamScope.equals(b.getScopeRef()))
@@ -179,17 +182,17 @@ public class AnalyticsQueryService {
 	// routing/downgrade in usage_record.savings_nanos, cache hits in cache_hit_log.
 	// wouldBeSpend = actual + routing + cache. percentSaved = total / wouldBe * 100.
 	// Team-scoped for a non-admin (6.1). Channels stay separate so they never double-count.
-	public SavingsSummary savings(Instant from, Instant to, String teamScope) {
+	public SavingsSummary savings(Instant from, Instant to, String tenant, String teamScope) {
 		long routingNanos = teamScope == null
-				? usageRepository.totalSavingsNanosBetween(from, to)
-				: usageRepository.totalSavingsNanosForTeamBetween(teamScope, from, to);
+				? usageRepository.totalSavingsNanosBetween(tenant, from, to)
+				: usageRepository.totalSavingsNanosForTeamBetween(tenant, teamScope, from, to);
 		long cacheNanos = teamScope == null
-				? cacheHitLog.totalSavingsNanosBetween(from, to)
-				: cacheHitLog.totalSavingsNanosForTeamBetween(teamScope, from, to);
+				? cacheHitLog.totalSavingsNanosBetween(tenant, from, to)
+				: cacheHitLog.totalSavingsNanosForTeamBetween(tenant, teamScope, from, to);
 		long totalSavingsNanos = routingNanos + cacheNanos;
 		long actualNanos = BudgetService.toNanos(teamScope == null
-				? usageRepository.totalCostBetween(from, to)
-				: usageRepository.totalCostForTeamBetween(teamScope, from, to));
+				? usageRepository.totalCostBetween(tenant, from, to)
+				: usageRepository.totalCostForTeamBetween(tenant, teamScope, from, to));
 		long wouldBeNanos = actualNanos + totalSavingsNanos;
 		Double percentSaved = wouldBeNanos == 0 ? null
 				: BigDecimal.valueOf(totalSavingsNanos)
@@ -205,24 +208,26 @@ public class AnalyticsQueryService {
 	// fixed window. Compared as exact integer nanodollars - no float drift.
 	// 6.1: a non-admin reconciles only its own team (both sides team-scoped); an admin
 	// reconciles the whole window.
-	public ReconciliationResult reconcile(Instant from, Instant to, String teamScope) {
+	public ReconciliationResult reconcile(Instant from, Instant to, String tenant, String teamScope) {
 		long pgRows;
 		long pgNanos;
 		if (teamScope == null) {
-			pgRows = usageRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
-			pgNanos = BudgetService.toNanos(usageRepository.totalCostBetween(from, to));
+			pgRows = usageRepository.countByTenantIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+					tenant, from, to);
+			pgNanos = BudgetService.toNanos(usageRepository.totalCostBetween(tenant, from, to));
 		} else {
-			pgRows = usageRepository.countByTeamIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-					teamScope, from, to);
-			pgNanos = BudgetService.toNanos(usageRepository.totalCostForTeamBetween(teamScope, from, to));
+			pgRows = usageRepository.countByTenantIdAndTeamIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+					tenant, teamScope, from, to);
+			pgNanos = BudgetService.toNanos(
+					usageRepository.totalCostForTeamBetween(tenant, teamScope, from, to));
 		}
 
 		String sql = "select count() as n, sum(cost_nanos) as cost_nanos from ("
 				+ "select event_id, argMax(cost_nanos, ingested_at) as cost_nanos from " + table()
 				+ " where event_ts >= fromUnixTimestamp64Milli(?) "
-				+ "and event_ts < fromUnixTimestamp64Milli(?)"
+				+ "and event_ts < fromUnixTimestamp64Milli(?) and tenant_id = ?"
 				+ (teamScope != null ? " and team_id = ?" : "") + " group by event_id)";
-		Map<String, Object> ch = clickhouse.queryForMap(sql, windowArgs(from, to, teamScope));
+		Map<String, Object> ch = clickhouse.queryForMap(sql, windowArgs(from, to, tenant, teamScope));
 		long chRows = ((Number) ch.get("n")).longValue();
 		long chNanos = ch.get("cost_nanos") == null ? 0 : ((Number) ch.get("cost_nanos")).longValue();
 

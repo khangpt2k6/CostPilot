@@ -59,16 +59,18 @@ public class AdminPolicyController {
 
 	@GetMapping
 	public List<PolicyView> list() {
-		return rules.findAll().stream().map(PolicyView::of).toList();
+		// 4.1: only the caller's own tenant
+		return rules.findByTenantId(CurrentPrincipal.require().tenantId()).stream().map(PolicyView::of).toList();
 	}
 
 	@PutMapping
 	public PolicyView upsert(@RequestBody UpsertRequest request) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
-		String old = rules.findByScopeTypeAndScopeRefAndActiveTrue(request.scopeType(), request.scopeRef())
+		String old = rules.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(actor.tenantId(), request.scopeType(),
+				request.scopeRef())
 				.map(r -> r.getAllowedModels() + "/" + r.getFallbackAction())
 				.orElse(null);
-		PolicyRule saved = policyService.upsertRule(request.scopeType(), request.scopeRef(),
+		PolicyRule saved = policyService.upsertRule(actor.tenantId(), request.scopeType(), request.scopeRef(),
 				request.allowedModels(), request.fallbackAction(), request.downgradeTo(),
 				request.approvalThresholdNanos());
 		adminAudit.record(actor.tenantId(), "policy.upsert", request.scopeType(), request.scopeRef(),
@@ -79,10 +81,10 @@ public class AdminPolicyController {
 	@DeleteMapping
 	public void deactivate(@RequestParam String scopeType, @RequestParam String scopeRef) {
 		AuthenticatedPrincipal actor = CurrentPrincipal.require();
-		String old = rules.findByScopeTypeAndScopeRefAndActiveTrue(scopeType, scopeRef)
+		String old = rules.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(actor.tenantId(), scopeType, scopeRef)
 				.map(r -> r.getAllowedModels() + "/" + r.getFallbackAction())
 				.orElse(null);
-		policyService.deactivateRule(scopeType, scopeRef);
+		policyService.deactivateRule(actor.tenantId(), scopeType, scopeRef);
 		adminAudit.record(actor.tenantId(), "policy.deactivate", scopeType, scopeRef, old, null);
 	}
 }

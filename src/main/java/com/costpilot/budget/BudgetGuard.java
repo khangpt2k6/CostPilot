@@ -56,7 +56,8 @@ public class BudgetGuard {
 			return {1, rem}
 			""", List.class);
 
-	public record Reservation(BudgetScope scope, String ref, long nanos) {
+	// 4.1: a reservation is held against a tenant-qualified counter
+	public record Reservation(String tenant, BudgetScope scope, String ref, long nanos) {
 	}
 
 	public record GuardResult(List<Reservation> reservations, String warning, boolean failOpen) {
@@ -91,6 +92,11 @@ public class BudgetGuard {
 	 * reservations are rolled back first).
 	 */
 	public GuardResult reserve(CanonicalChatRequest request, LedgerContext context) {
+		String tenant = context.tenantId();
+		if (tenant == null || tenant.isBlank()) {
+			// no tenant = nothing a budget can be scoped to; every real principal has one
+			return new GuardResult(List.of(), null, false);
+		}
 		try {
 			// phase 1: price lookup (30s-cached, Postgres on a miss) - the p99 tail suspect
 			long reserveNanos = BudgetService.toNanos(estimate(request));
@@ -104,7 +110,7 @@ public class BudgetGuard {
 					if (ref == null || ref.isBlank()) {
 						continue;
 					}
-					Long status = tryReserve(scope, ref, reserveNanos, held);
+					Long status = tryReserve(tenant, scope, ref, reserveNanos, held);
 					if (status != null && status == 2) {
 						warning = scope.dbValue() + "=" + ref + " budget below 20% remaining";
 					}
@@ -127,7 +133,8 @@ public class BudgetGuard {
 		for (Reservation reservation : result.reservations()) {
 			try {
 				redis.opsForValue().increment(
-						BudgetService.counterKey(reservation.scope(), reservation.ref()), reservation.nanos());
+						BudgetService.counterKey(reservation.tenant(), reservation.scope(), reservation.ref()),
+						reservation.nanos());
 			} catch (DataAccessException e) {
 				log.warn("budget guard release fail-open scope={} ref={}: {}",
 						reservation.scope().dbValue(), reservation.ref(), e.getMessage());
@@ -136,13 +143,14 @@ public class BudgetGuard {
 	}
 
 	/** Returns the soft/hard status for the scope, or null if the scope is ungoverned. */
-	private Long tryReserve(BudgetScope scope, String ref, long reserveNanos, List<Reservation> held) {
-		Long status = evalReserve(scope, ref, reserveNanos);
+	private Long tryReserve(String tenant, BudgetScope scope, String ref, long reserveNanos,
+			List<Reservation> held) {
+		Long status = evalReserve(tenant, scope, ref, reserveNanos);
 		if (status == 0) {
-			if (!resolveMissingCounter(scope, ref)) {
+			if (!resolveMissingCounter(tenant, scope, ref)) {
 				return null; // no budget governs this scope
 			}
-			status = evalReserve(scope, ref, reserveNanos);
+			status = evalReserve(tenant, scope, ref, reserveNanos);
 			if (status == 0) {
 				return null;
 			}
@@ -150,16 +158,16 @@ public class BudgetGuard {
 		if (status == 3) {
 			release(new GuardResult(held, null, false));
 			throw new BudgetExceededException(scope, ref,
-					BudgetService.fromNanos(remainingNanos(scope, ref)));
+					BudgetService.fromNanos(remainingNanos(tenant, scope, ref)));
 		}
-		held.add(new Reservation(scope, ref, reserveNanos));
+		held.add(new Reservation(tenant, scope, ref, reserveNanos));
 		return status;
 	}
 
 	@SuppressWarnings("unchecked")
-	private Long evalReserve(BudgetScope scope, String ref, long reserveNanos) {
+	private Long evalReserve(String tenant, BudgetScope scope, String ref, long reserveNanos) {
 		List<Long> result = redis.execute(RESERVE,
-				List.of(BudgetService.counterKey(scope, ref), BudgetService.limitKey(scope, ref)),
+				List.of(BudgetService.counterKey(tenant, scope, ref), BudgetService.limitKey(tenant, scope, ref)),
 				Long.toString(reserveNanos));
 		if (result == null || result.isEmpty()) {
 			throw new IllegalStateException("budget reserve script returned nothing");
@@ -168,20 +176,20 @@ public class BudgetGuard {
 	}
 
 	/** Counter missing: consult the negative cache, then Postgres; rebuild when governed. */
-	private boolean resolveMissingCounter(BudgetScope scope, String ref) {
-		if (redis.hasKey(BudgetService.noneKey(scope, ref))) {
+	private boolean resolveMissingCounter(String tenant, BudgetScope scope, String ref) {
+		if (redis.hasKey(BudgetService.noneKey(tenant, scope, ref))) {
 			return false;
 		}
-		if (budgets.findByScopeTypeAndScopeRefAndActiveTrue(scope.dbValue(), ref).isEmpty()) {
-			redis.opsForValue().set(BudgetService.noneKey(scope, ref), "1", NONE_CACHE_TTL);
+		if (budgets.findByTenantIdAndScopeTypeAndScopeRefAndActiveTrue(tenant, scope.dbValue(), ref).isEmpty()) {
+			redis.opsForValue().set(BudgetService.noneKey(tenant, scope, ref), "1", NONE_CACHE_TTL);
 			return false;
 		}
-		budgetService.rebuild(scope, ref);
+		budgetService.rebuild(tenant, scope, ref);
 		return true;
 	}
 
-	private long remainingNanos(BudgetScope scope, String ref) {
-		String value = redis.opsForValue().get(BudgetService.counterKey(scope, ref));
+	private long remainingNanos(String tenant, BudgetScope scope, String ref) {
+		String value = redis.opsForValue().get(BudgetService.counterKey(tenant, scope, ref));
 		return value == null ? 0 : Long.parseLong(value);
 	}
 
