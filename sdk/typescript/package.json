@@ -1,0 +1,32 @@
+{
+  "name": "@costpilot/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for the CostPilot LLM spend-governance gateway: OpenAI-compatible chat with typed budget/policy/approval outcomes, plus the admin API.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    }
+  },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["llm", "openai", "gateway", "budget", "finops", "costpilot"],
+  "repository": { "type": "git", "url": "git+https://github.com/khangpt2k6/CostPilot.git", "directory": "sdk/typescript" },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
