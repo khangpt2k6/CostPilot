@@ -24,9 +24,18 @@ ext['testcontainers.version'] = '1.21.3'
 ext['postgresql.version'] = '42.7.13'
 
 // same story for netty (reactor-netty, via the webflux WebClient): boot manages
-// 4.1.135.Final, which is one patch short of the five DoS fixes in 4.1.136.Final
-// (CVE-2026-59901 / 55831 / 55833 / 56745 / 56819).
-ext['netty.version'] = '4.1.136.Final'
+// 4.1.135.Final, which is short of the DoS fixes in 4.1.136.Final (CVE-2026-59901 /
+// 55831 / 55833 / 56745 / 56819) and the SNI routing bypass fixed in 4.1.137.Final
+// (CVE-2026-75595).
+ext['netty.version'] = '4.1.138.Final'
+
+// embedded tomcat 10.1.55: security constraint + auth bypasses (CVE-2026-65182 / 65905 /
+// 68525), fixed in 10.1.58
+ext['tomcat.version'] = '10.1.59'
+
+// httpcore5 5.3.6 (clickhouse-jdbc's http transport): CVE-2026-54399 and, in the h2
+// module, CVE-2026-54428. Fixed in 5.4.3; 5.4 stays API-compatible with httpclient5 5.5.
+ext['httpcore5.version'] = '5.4.4'
 
 java {
 	toolchain {
