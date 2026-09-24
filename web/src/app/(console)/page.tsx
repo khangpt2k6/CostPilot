@@ -9,7 +9,7 @@ import { Card, CardHeader, Empty, PageHeader, Stat } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { num, usd } from "@/lib/format";
 import { useSession, useWsKey } from "@/lib/session";
-import type { BudgetUtilization, DecisionCounts, Savings, SpendBucket, TrendPoint } from "@/lib/types";
+import type { AuditRow, BudgetUtilization, DecisionCounts, Page, Savings, SpendBucket, TrendPoint } from "@/lib/types";
 
 const RANGES = { "7d": 7, "30d": 30, "90d": 90 } as const;
 type Range = keyof typeof RANGES;
@@ -30,6 +30,16 @@ export default function OverviewPage() {
   const decisions = useA<DecisionCounts>("decisions", "decisions");
   const savings = useA<Savings>("savings", "savings");
   const budgets = useA<BudgetUtilization[]>("budgets", "budget-utilization?scope=team");
+  // blocked and held requests never reach the ledger, so the analytics pipeline doesn't see
+  // them; the per-request audit log does
+  const useAuditCount = (decision: string) =>
+    useQuery({
+      queryKey: useWsKey("audit-count", decision, range),
+      queryFn: () => api<Page<AuditRow>>(`/admin/audit?decision=${decision}&size=1&${qs}`),
+      select: (p) => p.totalElements,
+    });
+  const denied = useAuditCount("deny");
+  const held = useAuditCount("require_approval");
 
   if (trend.error instanceof ApiError && trend.error.status === 404) {
     return (
@@ -47,7 +57,9 @@ export default function OverviewPage() {
 
   const totalRequests = (byTeam.data ?? []).reduce((n, b) => n + b.requests, 0);
   const d = decisions.data;
-  const governed = d ? d.downgrade + d.route + d.cutoff + d.deny + d.approvalRequired : 0;
+  const deniedN = denied.data ?? 0;
+  const heldN = held.data ?? 0;
+  const governed = (d ? d.downgrade + d.route + d.cutoff : 0) + deniedN + heldN;
   const noTraffic = trend.isSuccess && byTeam.isSuccess && totalRequests === 0;
 
   return (
@@ -80,7 +92,7 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Spend" value={usd(savings.data?.actualSpendUsd)} sub={`last ${range}`} />
-        <Stat label="Requests" value={num(totalRequests)} sub={`${num(governed)} governed`} />
+        <Stat label="Requests served" value={num(totalRequests)} sub={`${num(governed)} changed, blocked or held`} />
         <Stat
           label="Saved"
           value={usd(savings.data?.totalSavingsUsd)}
@@ -88,8 +100,8 @@ export default function OverviewPage() {
         />
         <Stat
           label="Blocked or held"
-          value={num(d ? d.deny + d.approvalRequired + d.cutoff : 0)}
-          sub={d ? `${num(d.deny)} denied, ${num(d.approvalRequired)} awaiting approval` : undefined}
+          value={num(deniedN + heldN)}
+          sub={`${num(deniedN)} blocked by budget or policy, ${num(heldN)} held for approval`}
         />
       </div>
 
@@ -123,8 +135,8 @@ export default function OverviewPage() {
                   { key: "Routed to a cheaper model", value: d.route, detail: num(d.route) },
                   { key: "Downgraded (budget/policy)", value: d.downgrade, detail: num(d.downgrade) },
                   { key: "Cut off mid-stream", value: d.cutoff, detail: num(d.cutoff) },
-                  { key: "Held for approval", value: d.approvalRequired, detail: num(d.approvalRequired) },
-                  { key: "Denied", value: d.deny, detail: num(d.deny) },
+                  { key: "Held for approval", value: heldN, detail: num(heldN) },
+                  { key: "Blocked (budget or policy)", value: deniedN, detail: num(deniedN) },
                 ]}
               />
             ) : (
