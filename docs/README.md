@@ -15,15 +15,17 @@ Everything you need to run it, drive it, and point it at a real provider.
 | | page | what is in it |
 |---|---|---|
 | 1 | [Run it](#1-run-it) | one command, what comes up, seeded keys |
-| 2 | [The ten minute demo](#2-the-ten-minute-demo) | normal request, mid stream cutoff, hard block, dashboard, analytics |
-| 3 | [Admin CLI](#3-admin-cli) | budgets, policy, approvals, spend |
-| 4 | [Python SDK](#4-python-sdk) | governance aware client |
-| 5 | [Semantic cache](#5-semantic-cache) | optional, serves close prompts for free |
-| 6 | [Going live](#6-going-live-with-real-providers) | OpenAI, Anthropic, Gemini on Vertex |
-| 7 | [Response headers and errors](#7-response-headers-and-errors) | what the gateway tells your client |
-| 8 | [Load test](#8-load-test) | reproducing the numbers |
-| 9 | [Development](#9-development) | build, test, coverage gate |
-| 10 | [Releases](#10-releases) | tagging, published image, SBOM, provenance |
+| 2 | [The console](#2-the-console) | sign in, workspaces, roles, invites, GitHub/Google login |
+| 3 | [The ten minute demo](#3-the-ten-minute-demo) | normal request, mid stream cutoff, hard block, dashboard, analytics |
+| 4 | [Admin CLI](#4-admin-cli) | budgets, policy, approvals, spend |
+| 5 | [TypeScript SDK](#5-typescript-sdk) | typed governance outcomes, streaming, admin API |
+| 6 | [Python SDK](#6-python-sdk) | governance aware client |
+| 7 | [Semantic cache](#7-semantic-cache) | optional, serves close prompts for free |
+| 8 | [Going live](#8-going-live-with-real-providers) | OpenAI, Anthropic, Gemini on Vertex |
+| 9 | [Response headers and errors](#9-response-headers-and-errors) | what the gateway tells your client |
+| 10 | [Load test](#10-load-test) | reproducing the numbers |
+| 11 | [Development](#11-development) | build, test, coverage gate |
+| 12 | [Releases](#12-releases) | tagging, published image, SBOM, provenance |
 
 ---
 
@@ -32,7 +34,7 @@ Everything you need to run it, drive it, and point it at a real provider.
 The only prerequisite is Docker. The default upstream is a mock provider embedded in the app, so nothing below touches a real provider or costs a cent.
 
 ```bash
-git clone https://github.com/tanhoangkhoanguyen/CostPilot.git
+git clone https://github.com/khangpt2k6/CostPilot.git
 cd CostPilot
 docker compose up --build -d
 
@@ -45,12 +47,13 @@ What comes up:
 | service | port | role |
 |---|---|---|
 | gateway | 8080 | the governance control plane and the OpenAI compatible API |
+| console | 3000 | the web app: sign in, workspaces, budgets, policies, approvals, keys, analytics |
 | Postgres + pgvector | 5432 | source of truth: ledger, budgets, policy, audit, prices |
 | Redis | 6379 | live remaining budget counters |
 | Kafka | 9092 | usage events, published after a request settles |
 | ClickHouse | 8123 | spend analytics, fed from Kafka |
 | Prometheus | 9090 | governance metrics |
-| Grafana | 3000 | auto provisioned dashboard, anonymous viewer |
+| Grafana | 3300 | auto provisioned ops dashboard, anonymous viewer |
 
 Seeded demo keys. These are dev only, the database stores hashes, and the raw values are public here on purpose.
 
@@ -64,7 +67,50 @@ For any real deployment, override `COSTPILOT_API_KEY_PEPPER` and mint fresh keys
 
 ---
 
-## 2. The ten minute demo
+## 2. The console
+
+Open <http://localhost:3000>. The compose stack turns on **dev login**: type any email, no password. It exists so the stack works on a laptop without registering OAuth apps, and it is off unless `COSTPILOT_AUTH_DEV_LOGIN_ENABLED=true`. Never enable it on a public host.
+
+Your first sign-in creates you, a workspace you own, and a `default` team and project, so you can mint a key straight away. Locally you also join the seeded `acme` workspace as an admin (`COSTPILOT_AUTH_DEMO_TENANT=acme`), which is where the demo keys and traffic live. Switch workspaces from the sidebar.
+
+| page | what it does |
+|---|---|
+| Overview | spend, requests, savings, blocked/held counts, daily spend, spend by team and model, decision mix, budget utilization |
+| Quickstart / Playground | copyable snippets; send a real request with a key and see what governance did to it |
+| Budgets / Policies | caps per workspace, team, project or model; allowed models, downgrade targets, approval thresholds |
+| Approvals | held requests; approving replays the original call and bills it, rejecting never calls the model |
+| API keys | mint (secret shown once), see team and project, revoke (401 on the next call) |
+| Teams / Members | teams and projects; roles and single-use invite links |
+| Request log / Activity | why each request got its decision; who changed which setting |
+
+<p align="center">
+  <img src="console-budgets.png" alt="Budgets page listing a model cap and two team caps, one near its limit" width="100%">
+</p>
+
+**Roles.** Owner and admin manage budgets, policies, approvals, keys and people. Member sees the whole workspace and changes nothing. A workspace always keeps at least one owner, only an owner can grant or remove ownership, and anyone can leave. Invite links are single use, expire after 7 days, and never grant ownership.
+
+**Isolation.** A workspace is a tenant. Budgets, policies, approvals, the audit trail, analytics and keys are all confined to it, including when two workspaces use the same team names. `TenantIsolationIT` proves it for every surface.
+
+**How the console authenticates.** The gateway runs two security chains over the same controllers. Anything carrying an API key (and all of `/v1`) goes through the stateless key chain exactly as before. The console uses an httpOnly session cookie plus a CSRF token (the readable `XSRF-TOKEN` cookie echoed back as `X-XSRF-TOKEN`), and names the active workspace in `X-Workspace-ID`. The Next.js app proxies `/api`, `/admin`, `/auth`, `/oauth2` and `/v1` to the gateway, so both cookies stay first-party.
+
+### Signing in with GitHub or Google
+
+Create an OAuth app with the callback `http://localhost:3000/login/oauth2/code/github` (GitHub) or `.../google` (Google), then give the gateway its credentials in a `docker-compose.override.yml` next to the main file:
+
+```yaml
+services:
+  gateway:
+    environment:
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_ID: your-client-id
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET: your-client-secret
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_REDIRECT_URI: http://localhost:3000/login/oauth2/code/github
+```
+
+Leave the variables out entirely when you don't use a provider: Spring Boot refuses to start with a blank client id. The login page only shows the buttons the gateway reports at `/auth/providers`.
+
+---
+
+## 3. The ten minute demo
 
 ### A normal request flows through and gets billed
 
@@ -108,7 +154,7 @@ curl -si http://localhost:8080/v1/chat/completions \
 
 ### Watch it happen
 
-Open Grafana at <http://localhost:3300>. Anonymous viewing is on, use `admin` / `admin` if you want to edit. The governance dashboard shows requests, spend, and the budget rejections you just caused.
+The [console](#2-the-console) at <http://localhost:3000> shows the same traffic per workspace: the blocked requests land in Blocked or held and in the request log. Open Grafana at <http://localhost:3300> for the ops view. Anonymous viewing is on, use `admin` / `admin` if you want to edit. The governance dashboard shows requests, spend, and the budget rejections you just caused.
 
 Raw metrics: <http://localhost:9090>, or `curl localhost:8080/actuator/prometheus`.
 
@@ -125,7 +171,7 @@ Available under `/api/analytics/`: `spend`, `trends`, `top-spenders`, `decisions
 
 ---
 
-## 3. Admin CLI
+## 4. Admin CLI
 
 Finance and platform people run the control plane without a frontend. `costpilot` is a standalone Picocli app that talks to the gateway over HTTP only, so it has no dependency on the server.
 
@@ -165,7 +211,41 @@ Every command has `--help`, exits non zero on failure, and reads the endpoint an
 
 ---
 
-## 4. Python SDK
+## 5. TypeScript SDK
+
+`@costpilot/sdk` has no runtime dependencies and runs anywhere with `fetch` (Node 18+, Bun, Deno, edge, browsers).
+
+```bash
+npm install @costpilot/sdk
+```
+
+```ts
+import { CostPilot, BudgetExceededError, PolicyDeniedError, ApprovalRequiredError } from "@costpilot/sdk";
+
+const cp = new CostPilot({ apiKey: process.env.COSTPILOT_API_KEY, baseURL: "http://localhost:8080" });
+
+try {
+  const res = await cp.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "hi" }] });
+  console.log(res.choices[0].message.content, res.governance.modelDowngraded);
+} catch (err) {
+  if (err instanceof BudgetExceededError) console.log("blocked by", err.scope); // 402, nothing billed
+  else if (err instanceof PolicyDeniedError) console.log("rule", err.ruleId);   // 403
+  else if (err instanceof ApprovalRequiredError) console.log("held", err.approvalId); // 202
+  else throw err;
+}
+
+const stream = await cp.chat.completions.stream({ model: "gpt-4o-mini", messages });
+for await (const chunk of stream) process.stdout.write(chunk.choices[0]?.delta.content ?? "");
+console.log(stream.budgetCutoff); // true if the gateway cut it short to keep a budget
+```
+
+Chat calls retry on connection errors, 408, 429 and 5xx, and reuse one `Idempotency-Key` across retries so the ledger charges once. With an admin key the same client manages the workspace: `cp.budgets`, `cp.policies`, `cp.approvals`, `cp.keys`, `cp.audit`, `cp.analytics`.
+
+Full reference: [`sdk/typescript/`](../sdk/typescript/). Tests use a mocked `fetch`, so they need no gateway.
+
+---
+
+## 6. Python SDK
 
 You can point a plain OpenAI SDK at the gateway and parse headers yourself, or use the client that surfaces the governance verdict as typed data.
 
@@ -193,7 +273,7 @@ Source, quickstart and streaming examples: [`sdk/python/`](../sdk/python/). Its 
 
 ---
 
-## 5. Semantic cache
+## 7. Semantic cache
 
 Off by default. It is a cost optimisation you opt into, not part of the governance guarantee.
 
@@ -206,13 +286,13 @@ When an incoming prompt is close enough to one already answered, CostPilot serve
 - **How it decides.** Prompts are embedded by a deterministic local embedder, which means dev and tests make no network call and cost nothing, and stored in pgvector keyed by tenant and team. A lookup takes the nearest neighbour **inside the same tenant and team**, so tenants can never read each other's cache. The `Embedder` interface is the single place to swap in a real embedding provider.
 - **Precision over recall.** A hit needs cosine similarity of at least **0.97** (`COSTPILOT_CACHE_SIMILARITY_THRESHOLD`). The threshold is deliberately strict: the cache would rather forward a borderline prompt than return a wrong answer. A hit sets `X-CostPilot-Cache: hit`.
 - **Savings.** Every hit accrues `costpilot.cache.savings_nanos`. Grafana shows savings, hit ratio and hit/miss rate, and the figure reconciles against the hit log.
-- **Lifetime is bounded.** An entry older than the TTL (`COSTPILOT_CACHE_TTL`, default `PT24H`) is never served — the lookup excludes past-TTL rows — and a scheduled sweep (`COSTPILOT_CACHE_EVICTION_INTERVAL_MS`, default 60s) deletes them so the table stays bounded. A semantic cache with no expiry would serve unboundedly stale answers as "free" and grow without limit; every other cache in the system already has a TTL, and now this one does too. Evictions are counted at `costpilot.cache.evictions` and the live entry count is the `costpilot.cache.size` gauge.
+- **Lifetime is bounded.** An entry older than the TTL (`COSTPILOT_CACHE_TTL`, default `PT24H`) is never served (the lookup excludes past-TTL rows), and a scheduled sweep (`COSTPILOT_CACHE_EVICTION_INTERVAL_MS`, default 60s) deletes them so the table stays bounded. A semantic cache with no expiry would serve unboundedly stale answers as "free" and grow without limit; every other cache in the system already has a TTL, and now this one does too. Evictions are counted at `costpilot.cache.evictions` and the live entry count is the `costpilot.cache.size` gauge.
 
 Streaming requests skip the cache, because a cached answer is a complete response.
 
 ---
 
-## 6. Going live with real providers
+## 8. Going live with real providers
 
 Switching upstreams is configuration, never a code change.
 
@@ -249,7 +329,7 @@ Set `base_url` to `http://localhost:8080/v1` and use a CostPilot key as the bear
 
 ---
 
-## 7. Response headers and errors
+## 9. Response headers and errors
 
 What the gateway tells your client about the decision it made.
 
@@ -281,7 +361,7 @@ Terminal outcomes:
 
 ---
 
-## 8. Load test
+## 10. Load test
 
 One command runs the whole benchmark: stack up, budgets seeded, three k6 scenarios, then the claims are verified straight from the Postgres ledger.
 
@@ -301,7 +381,7 @@ Guard quantiles are read from Prometheus at the measurement window, so the decay
 
 ---
 
-## 9. Development
+## 11. Development
 
 ```bash
 ./gradlew build     # compile, full test suite, coverage gate
@@ -317,7 +397,7 @@ Guard quantiles are read from Prometheus at the measurement window, so the decay
 
 ---
 
-## 10. Releases
+## 12. Releases
 
 There is no version to bump by hand. The version comes from the git tag, so the jar, the image tag and the GitHub release cannot disagree about what they are.
 
