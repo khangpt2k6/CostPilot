@@ -49,7 +49,8 @@ export function SpendTrend({ points, from }: { points: TrendPoint[]; from: Date 
             minTickGap={24}
           />
           <YAxis
-            tickFormatter={(v: number) => usd(v)}
+            // whole dollars on the axis; cents only when the whole range is under $1
+            tickFormatter={(v: number) => usd(v, v === 0 || Math.abs(v) >= 1 ? 0 : 2)}
             tick={{ fill: "var(--color-muted)", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
