@@ -66,7 +66,7 @@ export default function MembersPage() {
       />
       <Card>
         <CardHeader title={`People in ${workspace?.name ?? "this workspace"}`} />
-        <Table head={["Name", "Email", "Role", "Joined", ""]}>
+        <Table loading={members.isPending} head={["Name", "Email", "Role", "Joined", ""]}>
           {(members.data ?? []).map((m) => {
             const self = m.userId === me.user.id;
             const role = m.role.toLowerCase();

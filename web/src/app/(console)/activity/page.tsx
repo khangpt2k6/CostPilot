@@ -18,7 +18,7 @@ export default function ActivityPage() {
         {rows.length === 0 && !activity.isPending ? (
           <Empty title="No changes yet" />
         ) : (
-          <Table head={["When", "Who", "Action", "Target", "Change"]}>
+          <Table loading={activity.isPending} head={["When", "Who", "Action", "Target", "Change"]}>
             {rows.map((a) => (
               <tr key={a.id}>
                 <Td className="whitespace-nowrap text-muted">{when(a.createdAt)}</Td>

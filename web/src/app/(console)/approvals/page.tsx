@@ -31,7 +31,7 @@ export default function ApprovalsPage() {
         {rows.length === 0 && !approvals.isPending ? (
           <Empty title="Nothing waiting">Held requests show up here within a few seconds.</Empty>
         ) : (
-          <Table head={["Requested", "Team", "Model", "Worst-case cost", "Why", "Expires", ""]}>
+          <Table loading={approvals.isPending} head={["Requested", "Team", "Model", "Worst-case cost", "Why", "Expires", ""]}>
             {rows.map((a) => (
               <tr key={a.id}>
                 <Td className="whitespace-nowrap text-muted">{ago(a.createdAt)}</Td>
