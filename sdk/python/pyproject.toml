@@ -30,9 +30,9 @@ dependencies = ["httpx>=0.24,<1"]
 dev = ["pytest>=7", "pytest-asyncio>=0.21"]
 
 [project.urls]
-Homepage = "https://github.com/tanhoangkhoanguyen/CostPilot"
-Repository = "https://github.com/tanhoangkhoanguyen/CostPilot"
-Issues = "https://github.com/tanhoangkhoanguyen/CostPilot/issues"
+Homepage = "https://github.com/khangpt2k6/CostPilot"
+Repository = "https://github.com/khangpt2k6/CostPilot"
+Issues = "https://github.com/khangpt2k6/CostPilot/issues"
 
 [tool.hatch.version]
 path = "src/costpilot/_version.py"

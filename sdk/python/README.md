@@ -1,6 +1,6 @@
 # costpilot (Python SDK)
 
-A governance-first Python client for the [CostPilot](https://github.com/tanhoangkhoanguyen/CostPilot) AI-spending gateway.
+A governance-first Python client for the [CostPilot](https://github.com/khangpt2k6/CostPilot) AI-spending gateway.
 
 CostPilot speaks the OpenAI API, so you *can* point any OpenAI client at it. This SDK adds what a raw client can't: the gateway's **runtime governance verdict as typed data** - cache hits, budget warnings, model routing/downgrades, mid-stream budget cut-offs, and typed exceptions for budget / policy / approval outcomes.
 
