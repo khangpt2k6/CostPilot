@@ -51,7 +51,7 @@ export default function AuditPage() {
         {data && data.content.length === 0 ? (
           <Empty title="No requests match" />
         ) : (
-          <Table head={["When", "Team / project", "Model", "Decision", "Tokens", "Cost", "Reason"]}>
+          <Table loading={rows.isPending} head={["When", "Team / project", "Model", "Decision", "Tokens", "Cost", "Reason"]}>
             {(data?.content ?? []).map((r) => (
               <tr key={r.id}>
                 <Td className="whitespace-nowrap text-muted">{when(r.createdAt)}</Td>

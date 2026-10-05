@@ -16,10 +16,16 @@
   --color-warn-soft: #fbf0dd;
   --color-danger: #b42318;
   --color-danger-soft: #fdecea;
+  --shadow-card: 0 1px 2px rgb(27 27 24 / 0.04), 0 1px 1px rgb(27 27 24 / 0.02);
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-fade-in: fade-in 120ms ease-out;
+  --animate-pop-in: pop-in 140ms ease-out;
+  --animate-slide-in: slide-in 180ms ease-out;
 }
 
+/* dark palette: follows the OS unless the user picked a theme (data-theme on <html>) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-bg: #121211;
     --color-panel: #1a1a18;
     --color-line: #2c2c29;
@@ -32,6 +38,64 @@
     --color-warn-soft: #33270f;
     --color-danger: #f0776c;
     --color-danger-soft: #3a1b18;
+    --shadow-card: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #121211;
+  --color-panel: #1a1a18;
+  --color-line: #2c2c29;
+  --color-ink: #ecebe6;
+  --color-muted: #9b9a92;
+  --color-accent: #7fc4ad;
+  --color-accent-soft: #1d2f29;
+  --color-chart: #34a87a;
+  --color-warn: #e3a94f;
+  --color-warn-soft: #33270f;
+  --color-danger: #f0776c;
+  --color-danger-soft: #3a1b18;
+  --shadow-card: none;
+  color-scheme: dark;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -50,4 +114,9 @@ code,
 pre,
 .mono {
   font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
 }

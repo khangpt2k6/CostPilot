@@ -48,3 +48,4 @@ secrets/*.json
 
 ### Local process notes (never commit) ###
 docs/superpowers/
+.playwright-mcp/

@@ -13,15 +13,18 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Menu,
   Rocket,
   Settings,
   ShieldCheck,
   SquareTerminal,
   Users,
   Wallet,
+  X,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -44,6 +47,76 @@ const NAV = [
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [drawer, setDrawer] = useState(false);
+  const current = NAV.find((n) => "href" in n && isActive(n.href, pathname));
+
+  // close the mobile drawer on navigation and on Escape
+  useEffect(() => setDrawer(false), [pathname]);
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawer]);
+
+  return (
+    <div className="flex min-h-screen">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-panel md:flex">
+        <Sidebar />
+      </aside>
+
+      {drawer && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 animate-fade-in bg-black/40" onClick={() => setDrawer(false)} />
+          <aside
+            aria-label="Navigation"
+            className="relative flex h-full w-64 animate-slide-in flex-col border-r border-line bg-panel shadow-2xl"
+          >
+            <button
+              onClick={() => setDrawer(false)}
+              className="absolute right-2 top-3.5 rounded p-1.5 text-muted hover:bg-bg"
+              aria-label="Close menu"
+            >
+              <X size={16} />
+            </button>
+            <Sidebar />
+          </aside>
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-line bg-panel/90 px-4 backdrop-blur md:hidden">
+          <button onClick={() => setDrawer(true)} className="-ml-1.5 rounded p-1.5 hover:bg-bg" aria-label="Open menu">
+            <Menu size={18} />
+          </button>
+          <Logo />
+          {current && "label" in current && <span className="truncate text-sm text-muted">/ {current.label}</span>}
+        </header>
+        <main className="mx-auto max-w-6xl animate-fade-in px-4 py-6 md:px-8 md:py-8" key={pathname}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function isActive(href: string, pathname: string) {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+function Logo() {
+  return (
+    <Link href="/" className="flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-panel">
+        <Gauge size={16} />
+      </span>
+      <span className="font-semibold tracking-tight">CostPilot</span>
+    </Link>
+  );
+}
+
+function Sidebar() {
+  const pathname = usePathname();
   const router = useRouter();
   const client = useQueryClient();
   const { me, workspace, switchWorkspace } = useSession();
@@ -55,97 +128,71 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-panel md:flex">
-        <div className="flex items-center gap-2 px-4 py-4">
-          <Gauge size={20} className="text-accent" />
-          <span className="font-semibold tracking-tight">CostPilot</span>
-        </div>
-
-        <div className="px-3 pb-3">
-          <select
-            aria-label="Workspace"
-            value={workspace?.id ?? ""}
-            onChange={(e) => switchWorkspace(e.target.value)}
-            className="h-9 w-full rounded-md border border-line bg-bg px-2 text-sm"
-          >
-            {me.workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.role})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-2 pb-4">
-          {NAV.map((item, i) =>
-            "section" in item ? (
-              <p key={i} className="px-2 pb-1 pt-4 text-xs font-medium uppercase tracking-wide text-muted">
-                {item.section}
-              </p>
-            ) : (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={clsx(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                  (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href))
-                    ? "bg-accent-soft font-medium text-accent"
-                    : "text-ink hover:bg-bg",
-                )}
-              >
-                <item.icon size={16} />
-                {item.label}
-              </Link>
-            ),
-          )}
-        </nav>
-
-        <div className="flex items-center gap-2 border-t border-line px-3 py-3">
-          {me.user.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={me.user.avatarUrl} alt="" className="h-7 w-7 rounded-full" />
-          ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
-              {me.user.displayName.slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{me.user.displayName}</p>
-            <p className="truncate text-xs text-muted">{me.user.email}</p>
-          </div>
-          <button onClick={logout} className="rounded p-1.5 text-muted hover:bg-bg" aria-label="Log out" title="Log out">
-            <LogOut size={16} />
-          </button>
-        </div>
-      </aside>
-
-      <div className="min-w-0 flex-1">
-        {/* narrow screens: a compact top bar instead of the sidebar */}
-        <header className="flex items-center gap-2 overflow-x-auto border-b border-line bg-panel px-4 py-2 md:hidden">
-          <Gauge size={18} className="shrink-0 text-accent" />
-          <select
-            aria-label="Workspace"
-            value={workspace?.id ?? ""}
-            onChange={(e) => switchWorkspace(e.target.value)}
-            className="h-8 max-w-40 shrink-0 rounded-md border border-line bg-bg px-1 text-sm"
-          >
-            {me.workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          {NAV.filter((n) => !("section" in n)).map((item) =>
-            "href" in item ? (
-              <Link key={item.href} href={item.href} className="shrink-0 rounded px-2 py-1 text-sm hover:bg-bg">
-                {item.label}
-              </Link>
-            ) : null,
-          )}
-        </header>
-        <main className="mx-auto max-w-6xl px-4 py-8 md:px-8">{children}</main>
+    <>
+      <div className="px-4 py-4">
+        <Logo />
       </div>
-    </div>
+
+      <div className="px-3 pb-2">
+        <select
+          aria-label="Workspace"
+          value={workspace?.id ?? ""}
+          onChange={(e) => switchWorkspace(e.target.value)}
+          className="h-9 w-full rounded-md border border-line bg-bg px-2 text-sm"
+        >
+          {me.workspaces.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name} ({w.role})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-2 pb-4">
+        {NAV.map((item, i) =>
+          "section" in item ? (
+            <p key={i} className="px-2 pb-1 pt-4 text-[11px] font-medium uppercase tracking-wider text-muted">
+              {item.section}
+            </p>
+          ) : (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isActive(item.href, pathname) ? "page" : undefined}
+              className={clsx(
+                "relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+                isActive(item.href, pathname)
+                  ? "bg-accent-soft font-medium text-accent before:absolute before:-left-2 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-accent"
+                  : "text-ink/80 hover:bg-bg hover:text-ink",
+              )}
+            >
+              <item.icon size={16} />
+              {item.label}
+            </Link>
+          ),
+        )}
+      </nav>
+
+      <div className="px-3 pb-2">
+        <ThemeToggle className="w-full" />
+      </div>
+      <div className="flex items-center gap-2 border-t border-line px-3 py-3">
+        {me.user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={me.user.avatarUrl} alt="" className="h-7 w-7 rounded-full" />
+        ) : (
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+            {me.user.displayName.slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{me.user.displayName}</p>
+          <p className="truncate text-xs text-muted">{me.user.email}</p>
+        </div>
+        <button onClick={logout} className="rounded p-1.5 text-muted hover:bg-bg hover:text-ink" aria-label="Log out" title="Log out">
+          <LogOut size={16} />
+        </button>
+      </div>
+    </>
   );
 }

@@ -59,7 +59,7 @@ export default function PoliciesPage() {
         {rows.length === 0 && !policies.isPending ? (
           <Empty title="No policies">Every team can call every model until you add one.</Empty>
         ) : (
-          <Table head={["Scope", "Allowed models", "Otherwise", "Approval over", ""]}>
+          <Table loading={policies.isPending} head={["Scope", "Allowed models", "Otherwise", "Approval over", ""]}>
             {rows.map((p) => (
               <tr key={`${p.scopeType}:${p.scopeRef}`}>
                 <Td>

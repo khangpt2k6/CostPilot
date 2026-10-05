@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { BarChart3, DollarSign, PiggyBank, ShieldAlert, Zap } from "lucide-react";
 
 import { BarList, SpendTrend, UtilizationList } from "@/components/charts";
-import { Card, CardHeader, Empty, PageHeader, Stat } from "@/components/ui";
+import { Card, CardHeader, Empty, PageHeader, Skeleton, Stat } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { num, usd } from "@/lib/format";
 import { useSession, useWsKey } from "@/lib/session";
@@ -73,7 +74,8 @@ export default function OverviewPage() {
               <button
                 key={r}
                 onClick={() => setRange(r)}
-                className={`rounded px-3 py-1 text-sm ${r === range ? "bg-accent-soft font-medium text-accent" : "text-muted hover:text-ink"}`}
+                aria-pressed={r === range}
+                className={`rounded px-3 py-1 text-sm transition-colors ${r === range ? "bg-accent-soft font-medium text-accent" : "text-muted hover:text-ink"}`}
               >
                 {r}
               </button>
@@ -84,22 +86,32 @@ export default function OverviewPage() {
 
       {noTraffic && (
         <Card className="mb-6 border-dashed">
-          <Empty title="No traffic yet">
+          <Empty title="No traffic yet" icon={Zap}>
             Mint a key and send your first request through the gateway. <Link href="/quickstart" className="text-accent underline">Open the quickstart</Link>.
           </Empty>
         </Card>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Spend" value={usd(savings.data?.actualSpendUsd)} sub={`last ${range}`} />
-        <Stat label="Requests served" value={num(totalRequests)} sub={`${num(governed)} changed, blocked or held`} />
+        <Stat label="Spend" icon={DollarSign} loading={savings.isPending} value={usd(savings.data?.actualSpendUsd)} sub={`last ${range}`} />
+        <Stat
+          label="Requests served"
+          icon={BarChart3}
+          loading={byTeam.isPending}
+          value={num(totalRequests)}
+          sub={`${num(governed)} changed, blocked or held`}
+        />
         <Stat
           label="Saved"
+          icon={PiggyBank}
+          loading={savings.isPending}
           value={usd(savings.data?.totalSavingsUsd)}
           sub={savings.data?.percentSaved != null ? `${savings.data.percentSaved}% vs. unrouted` : "routing + cache"}
         />
         <Stat
           label="Blocked or held"
+          icon={ShieldAlert}
+          loading={denied.isPending || held.isPending}
           value={num(deniedN + heldN)}
           sub={`${num(deniedN)} blocked by budget or policy, ${num(heldN)} held for approval`}
         />
@@ -108,7 +120,13 @@ export default function OverviewPage() {
       <Card className="mt-6">
         <CardHeader title="Daily spend" sub="USD per day, settled cost from the ledger pipeline" />
         <div className="p-4">
-          {trend.data && trend.data.length > 0 ? <SpendTrend points={trend.data} from={from} /> : <Empty title="No spend in this range" />}
+          {trend.isPending ? (
+            <ChartSkeleton />
+          ) : trend.data && trend.data.length > 0 ? (
+            <SpendTrend points={trend.data} from={from} />
+          ) : (
+            <Empty title="No spend in this range" />
+          )}
         </div>
       </Card>
 
@@ -116,19 +134,21 @@ export default function OverviewPage() {
         <Card>
           <CardHeader title="Spend by team" />
           <div className="p-4">
-            <SpendList rows={byTeam.data} />
+            {byTeam.isPending ? <ListSkeleton /> : <SpendList rows={byTeam.data} />}
           </div>
         </Card>
         <Card>
           <CardHeader title="Spend by model" sub="The model that actually ran, after any downgrade" />
           <div className="p-4">
-            <SpendList rows={byModel.data} />
+            {byModel.isPending ? <ListSkeleton /> : <SpendList rows={byModel.data} />}
           </div>
         </Card>
         <Card>
           <CardHeader title="Decisions" sub="What the gateway did with each request" />
           <div className="p-4">
-            {d ? (
+            {decisions.isPending ? (
+              <ListSkeleton />
+            ) : d ? (
               <BarList
                 rows={[
                   { key: "Allowed", value: d.allow, detail: num(d.allow) },
@@ -154,7 +174,9 @@ export default function OverviewPage() {
             }
           />
           <div className="p-4">
-            {budgets.data && budgets.data.length > 0 ? (
+            {budgets.isPending ? (
+              <ListSkeleton />
+            ) : budgets.data && budgets.data.length > 0 ? (
               <UtilizationList rows={budgets.data} />
             ) : (
               <Empty title="No team budgets">Set a cap so runaway spend gets blocked, not billed.</Empty>
@@ -173,5 +195,31 @@ function SpendList({ rows }: { rows: SpendBucket[] | undefined }) {
     <BarList
       rows={top.map((b) => ({ key: b.key, value: Number(b.costUsd), detail: `${usd(b.costUsd)} · ${num(b.requests)} req` }))}
     />
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <ul className="space-y-3.5" aria-busy>
+      {[70, 55, 40, 25].map((w) => (
+        <li key={w}>
+          <div className="mb-1.5 flex justify-between">
+            <Skeleton className="w-28" />
+            <Skeleton className="w-16" />
+          </div>
+          <Skeleton className="h-1.5" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="flex h-56 items-end gap-1.5" aria-busy>
+      {[30, 45, 38, 60, 52, 70, 48, 66, 80, 58, 74, 62, 85, 72].map((h, i) => (
+        <span key={i} className="flex-1 animate-shimmer rounded-t bg-line" style={{ height: `${h}%` }} />
+      ))}
+    </div>
   );
 }

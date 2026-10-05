@@ -42,7 +42,7 @@ export default function KeysPage() {
         {rows.length === 0 && !keys.isPending ? (
           <Empty title="No keys yet">Create one to start sending requests.</Empty>
         ) : (
-          <Table head={["Name", "Key", "Team / project", "Access", "Created", ""]}>
+          <Table loading={keys.isPending} head={["Name", "Key", "Team / project", "Access", "Created", ""]}>
             {rows.map((k) => (
               <tr key={k.id} className={k.revokedAt ? "opacity-50" : undefined}>
                 <Td className="font-medium">{k.name}</Td>

@@ -49,7 +49,7 @@ export default function BudgetsPage() {
         {rows.length === 0 && !budgets.isPending ? (
           <Empty title="No budgets yet">Without a budget, spend is only observed, never blocked.</Empty>
         ) : (
-          <Table head={["Scope", "Applies to", "Limit", "Remaining", "Used", "Status", ""]}>
+          <Table loading={budgets.isPending} head={["Scope", "Applies to", "Limit", "Remaining", "Used", "Status", ""]}>
             {rows.map((b) => {
               const used = b.remaining == null ? null : Math.max(0, 1 - b.remaining / b.limit);
               return (
