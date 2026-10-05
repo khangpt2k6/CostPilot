@@ -37,6 +37,11 @@ ext['tomcat.version'] = '10.1.59'
 // module, CVE-2026-54428. Fixed in 5.4.3; 5.4 stays API-compatible with httpclient5 5.5.
 ext['httpcore5.version'] = '5.4.4'
 
+// jackson 2.21.4 (boot-managed): DoS via regex backtracking / unbounded StringBuilder in core
+// and unbounded numeric parsing / type cache growth / forward-reference completion in databind
+// (CVE-2026-89407 / 89425 / 68497 / 91776 / 91777). Fixed in 2.21.7.
+ext['jackson-bom.version'] = '2.21.7'
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)

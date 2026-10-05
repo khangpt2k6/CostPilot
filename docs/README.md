@@ -411,7 +411,7 @@ That triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml
 What comes out:
 
 ```bash
-docker pull ghcr.io/tanhoangkhoanguyen/costpilot:1.2.3
+docker pull ghcr.io/khangpt2k6/costpilot:1.2.3
 ```
 
 - **Image** on GHCR, tagged with the version and `latest`. The exact bytes that passed the boot check are the bytes pushed - the push step ships the tested image rather than rebuilding it.
@@ -419,8 +419,8 @@ docker pull ghcr.io/tanhoangkhoanguyen/costpilot:1.2.3
 - **Build provenance**, signed and pushed to the registry alongside the image:
 
 ```bash
-gh attestation verify oci://ghcr.io/tanhoangkhoanguyen/costpilot:1.2.3 \
-  --repo tanhoangkhoanguyen/CostPilot
+gh attestation verify oci://ghcr.io/khangpt2k6/costpilot:1.2.3 \
+  --repo khangpt2k6/CostPilot
 ```
 
 Between tags, the version resolves from `git describe`, so a dev build reports something honest like `1.2.3-4-gabc1234` rather than a stale `0.0.1-SNAPSHOT`. `/actuator/info` also carries the commit sha, which is what you actually want when a container is misbehaving and nobody remembers what shipped.
