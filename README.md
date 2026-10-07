@@ -129,6 +129,17 @@ All figures are reconciled from the Postgres ledger and Prometheus, not from loa
 | Budget guard decision latency, p99 at 100 req/s | **About 14 ms** |
 | Billing accuracy | Provider reported tokens × published price, exact |
 
+## Concurrency guarantees, in plain English
+
+Many requests hit CostPilot in the same instant and real money is involved, so the hard questions are about races: two things happening at once that each look fine alone. Each row below is one thing that could go wrong, how it is prevented, and the test that proves it.
+
+| What could go wrong | How CostPilot prevents it | Proof |
+|---|---|---|
+| 100 requests hit the same team budget at once and together spend more than the cap | Spend is reserved up front inside one atomic Redis Lua script (subtract, roll back if it went negative). There is no gap between "check the budget" and "charge it" for another request to slip through | `BudgetGuardIT.twelveHundredSimultaneousRequestsOnVirtualThreadsNeverOverspendAnyTeam`: 12 teams, 1,200 requests on virtual threads, zero overspend |
+| A client times out, retries, and the same request is billed twice | Every request carries an idempotency key backed by a unique constraint in Postgres. The database decides who wins the insert; the loser sees the row already exists and charges nothing | `UsageLedgerServiceIT.everyRequestIsBilledExactlyOnceWhenClientsRetryAfterTimeouts`: 40 requests retried 5 times each, 40 rows, 40 charges |
+| An admin approves a parked request at the exact moment the background sweeper expires it, so it is forwarded (money spent) and then overwritten as expired | A decision is claimed with a conditional `UPDATE ... WHERE state = 'pending'` before anything is forwarded. The second writer updates zero rows and is refused, so exactly one decision wins and an expired request never costs anything | `ApprovalDecisionRaceIT`: approve vs expire, approve vs reject, 16 admins rejecting at once |
+| A stream keeps generating after the budget is gone | Cost is metered per chunk and the stream is cut within one chunk of crossing the cap, with a compare-and-set so the cutoff is recorded exactly once | Measured on a live Gemini stream in [docs/BENCHMARK.md](docs/BENCHMARK.md) |
+
 ## Documentation
 
 | Guide | Contents |
