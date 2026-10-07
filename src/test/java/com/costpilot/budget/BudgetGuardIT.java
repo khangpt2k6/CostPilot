@@ -11,6 +11,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -186,6 +192,88 @@ class BudgetGuardIT {
 		} finally {
 			factory.destroy();
 		}
+	}
+
+	@Test
+	void twelveHundredSimultaneousRequestsOnVirtualThreadsNeverOverspendAnyTeam() throws Exception {
+		// 12 teams x 100 requests, all released in the same instant on virtual threads.
+		// Each request reserves ~0.000077 against a 0.0005 cap, so only ~6 per team can
+		// legally get through. The property: no team's admitted reservations ever exceed
+		// its cap, no matter how many requests race for the last dollar.
+		int teams = 12;
+		int perTeam = 100;
+		String cap = "0.0005";
+		List<String> teamIds = new ArrayList<>();
+		for (int i = 0; i < teams; i++) {
+			teamIds.add(newTeamWithBudget(cap));
+		}
+		CanonicalChatRequest request = new CanonicalChatRequest("gpt-4o-mini",
+				List.of(new CanonicalChatRequest.Message("user", "hello costpilot")), 128, false);
+		// warm each team's counter once (resolve from Postgres + SETNX install), as it
+		// would already be in production; the flood then exercises the Lua hot path
+		for (String team : teamIds) {
+			guard.release(guard.reserve(request,
+					new LedgerContext(AuthTestSupport.TENANT, team, null, null, null, "warm-" + team)));
+		}
+		ConcurrentHashMap<String, AtomicLong> admittedNanos = new ConcurrentHashMap<>();
+		ConcurrentHashMap<String, AtomicInteger> blocked = new ConcurrentHashMap<>();
+		List<BudgetGuard.GuardResult> holds = Collections.synchronizedList(new ArrayList<>());
+		long[] latencyNanos = new long[teams * perTeam];
+		AtomicInteger slot = new AtomicInteger();
+		CountDownLatch start = new CountDownLatch(1);
+
+		try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+			List<Future<?>> futures = new ArrayList<>();
+			for (String team : teamIds) {
+				for (int i = 0; i < perTeam; i++) {
+					String key = team + "-" + i;
+					futures.add(pool.submit(() -> {
+						start.await();
+						LedgerContext ctx = new LedgerContext(AuthTestSupport.TENANT, team, null, null, null, key);
+						long t0 = System.nanoTime();
+						try {
+							BudgetGuard.GuardResult r = guard.reserve(request, ctx);
+							holds.add(r);
+							long nanos = r.reservations().stream()
+									.filter(x -> x.scope() == BudgetScope.TEAM)
+									.mapToLong(BudgetGuard.Reservation::nanos).sum();
+							admittedNanos.computeIfAbsent(team, t -> new AtomicLong()).addAndGet(nanos);
+						} catch (BudgetExceededException e) {
+							blocked.computeIfAbsent(team, t -> new AtomicInteger()).incrementAndGet();
+						} finally {
+							latencyNanos[slot.getAndIncrement()] = System.nanoTime() - t0;
+						}
+						return null;
+					}));
+				}
+			}
+			start.countDown();
+			for (Future<?> f : futures) {
+				f.get(120, TimeUnit.SECONDS);
+			}
+		}
+
+		long capNanos = BudgetService.toNanos(new BigDecimal(cap));
+		for (String team : teamIds) {
+			long admitted = admittedNanos.getOrDefault(team, new AtomicLong()).get();
+			assertThat(admitted).as("team %s: admitted reservations stay within the cap", team)
+					.isLessThanOrEqualTo(capNanos);
+			assertThat(admitted).as("team %s: some requests got through", team).isGreaterThan(0);
+			assertThat(blocked.getOrDefault(team, new AtomicInteger()).get())
+					.as("team %s: the rest were blocked", team).isGreaterThan(0);
+			assertThat(budgetService.remaining(AuthTestSupport.TENANT, BudgetScope.TEAM, team))
+					.isGreaterThanOrEqualTo(BigDecimal.ZERO);
+		}
+
+		// per-check latency for the record only. The 14ms p99 in docs/BENCHMARK.md is a
+		// sustained 100 req/s on a dedicated VM; here 1,200 reserves land on one pipelined
+		// Redis connection in the same instant, so the tail is queueing, not per-check cost.
+		// The property under test is overspend, which is asserted above.
+		Arrays.sort(latencyNanos);
+		double p50 = latencyNanos[latencyNanos.length / 2] / 1e6;
+		double p99 = latencyNanos[(int) (latencyNanos.length * 0.99)] / 1e6;
+		System.out.printf("guard under 1,200 simultaneous reserves: p50=%.2fms p99=%.2fms%n", p50, p99);
+		holds.forEach(guard::release);
 	}
 
 	@Test

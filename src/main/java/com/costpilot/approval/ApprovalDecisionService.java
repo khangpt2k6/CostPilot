@@ -59,7 +59,10 @@ public class ApprovalDecisionService {
 	 */
 	@Transactional
 	public Outcome approve(PendingApproval pending, String decidedBy) {
-		requirePending(pending);
+		// claim the decision BEFORE forwarding: if a concurrent expire/reject already won,
+		// nothing reaches the provider and nothing is billed. If the forward below throws,
+		// the transaction rolls the claim back and the row is pending again.
+		claim(pending, PendingApproval.State.approved, decidedBy, "approved");
 		CanonicalChatRequest request = codec.deserialize(pending.getRequestPayload());
 		LedgerContext ledger = ledgerOf(pending);
 		// approval granted: replay as a normal ALLOW on the requested model
@@ -67,7 +70,6 @@ public class ApprovalDecisionService {
 		ChatCompletionResponse response = executor.executeNonStreaming(request, decision, request.model(),
 				pending.getMinTier(), GovernedRequestExecutor.HeaderSink.NONE);
 		pending.setStoredResponse(responseCodec.serialize(response));
-		pending.decide(PendingApproval.State.approved, decidedBy, "approved", Instant.now());
 		repository.save(pending);
 		log.info("approval approved id={} model={} decidedBy={}", pending.getId(), request.model(), decidedBy);
 		return new Outcome(pending, response);
@@ -76,29 +78,39 @@ public class ApprovalDecisionService {
 	/** Reject: mark rejected with a reason. Never forwarded. */
 	@Transactional
 	public PendingApproval reject(PendingApproval pending, String decidedBy, String reason) {
-		requirePending(pending);
-		pending.decide(PendingApproval.State.rejected, decidedBy,
-				reason != null && !reason.isBlank() ? reason : "rejected", Instant.now());
-		PendingApproval saved = repository.save(pending);
-		log.info("approval rejected id={} decidedBy={} reason=\"{}\"", saved.getId(), decidedBy,
-				saved.getDecisionReason());
-		return saved;
+		claim(pending, PendingApproval.State.rejected, decidedBy,
+				reason != null && !reason.isBlank() ? reason : "rejected");
+		log.info("approval rejected id={} decidedBy={} reason=\"{}\"", pending.getId(), decidedBy,
+				pending.getDecisionReason());
+		return pending;
 	}
 
 	/** Auto-reject on TTL expiry. Never forwarded. */
 	@Transactional
 	public PendingApproval expire(PendingApproval pending) {
-		requirePending(pending);
-		pending.decide(PendingApproval.State.expired, "system", "TTL expired", Instant.now());
-		PendingApproval saved = repository.save(pending);
-		log.info("approval expired id={} expiredAt={}", saved.getId(), saved.getExpiresAt());
-		return saved;
+		claim(pending, PendingApproval.State.expired, "system", "TTL expired");
+		log.info("approval expired id={} expiredAt={}", pending.getId(), pending.getExpiresAt());
+		return pending;
 	}
 
-	private void requirePending(PendingApproval pending) {
+	// The pending -> terminal transition is claimed with one conditional UPDATE, so two
+	// writers racing on the same row (admin approve vs sweeper expire, two admins at once)
+	// can never both succeed: the database serialises them and the second one updates
+	// zero rows. The in-memory check is only a fast path for an already-decided handle.
+	private void claim(PendingApproval pending, PendingApproval.State terminal, String decidedBy, String reason) {
 		if (pending.getState() != PendingApproval.State.pending) {
 			throw new NotPendingException(pending.getId(), pending.getState());
 		}
+		Instant now = Instant.now();
+		int won = repository.decideIfPending(pending.getId(), terminal, decidedBy, reason, now,
+				PendingApproval.State.pending);
+		if (won == 0) {
+			PendingApproval.State current = repository.findById(pending.getId())
+					.map(PendingApproval::getState).orElse(pending.getState());
+			throw new NotPendingException(pending.getId(), current);
+		}
+		// keep the caller's copy in step with the row it just claimed
+		pending.decide(terminal, decidedBy, reason, now);
 	}
 
 	private static LedgerContext ledgerOf(PendingApproval p) {
